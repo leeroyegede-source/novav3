@@ -1,4 +1,5 @@
-import { ProjectMemory } from './projectMemory';
+const fs = require('fs');
+const content = `import { ProjectMemory } from './projectMemory';
 import { supabase } from '../supabaseClient';
 
 export interface ProjectSnapshot {
@@ -74,15 +75,13 @@ export class VersionManager {
     if (typeof window !== 'undefined') {
       supabase.auth.getSession().then(({ data }) => {
         if (data?.session?.user && projectId) {
-           (async () => {
-             await supabase.from('project_versions').insert({
-                id: snapshot.id,
-                project_id: projectId,
-                files: snapshot.files,
-                message: snapshot.message,
-                preview_state: snapshot.previewState
-             });
-           })();
+           supabase.from('project_versions').insert({
+              id: snapshot.id,
+              project_id: projectId,
+              files: snapshot.files,
+              message: snapshot.message,
+              preview_state: snapshot.previewState
+           }).then(() => {}).catch(console.error);
         }
       });
     }
@@ -104,11 +103,10 @@ export class VersionManager {
       if (typeof window !== 'undefined') {
         supabase.auth.getSession().then(({ data }) => {
           if (data?.session?.user) {
-             (async () => {
-               await supabase.from('project_versions')
-                 .update({ preview_state: state })
-                 .eq('id', id);
-             })();
+             supabase.from('project_versions')
+               .update({ preview_state: state })
+               .eq('id', id)
+               .then(() => {}).catch(console.error);
           }
         });
       }
@@ -125,3 +123,7 @@ export class VersionManager {
     this.history = [];
   }
 }
+`;
+
+fs.writeFileSync('src/lib/memory/versionManager.ts', content);
+console.log("Updated VersionManager.ts to use Supabase");

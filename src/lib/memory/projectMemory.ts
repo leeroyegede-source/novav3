@@ -1,4 +1,3 @@
-import { supabase } from '../supabaseClient';
 
 export interface MemoryItem {
   id: string;
@@ -23,12 +22,23 @@ export interface ProjectMemoryState {
 }
 
 export class ProjectMemory {
+  private static STORAGE_KEY = 'nova_project_memory';
   private static state: ProjectMemoryState | null = null;
   private static initialized = false;
 
   static async init() {
     if (this.initialized) return;
-    this.initialized = true;
+    if (typeof window !== 'undefined') {
+      try {
+        const lsData = localStorage.getItem(this.STORAGE_KEY);
+          if (lsData) {
+            this.state = JSON.parse(lsData);
+          }
+      } catch (e) {
+        console.error("Failed to init ProjectMemory:", e);
+      }
+      this.initialized = true;
+    }
   }
 
   static getMemory(): ProjectMemoryState {
@@ -58,12 +68,22 @@ export class ProjectMemory {
     };
     
     this.state = cleanState;
+    if (typeof window !== 'undefined') {
+      localStorage.removeItem(this.STORAGE_KEY);
+      
+      this.saveMemory(cleanState);
+    }
+    
     return cleanState;
   }
 
   static saveMemory(state: ProjectMemoryState) {
     state.updated_at = Date.now();
     this.state = state;
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(this.STORAGE_KEY, JSON.stringify(state));
+      
+    }
   }
 
   static addItem(item: Omit<MemoryItem, 'id' | 'created_at'>) {
