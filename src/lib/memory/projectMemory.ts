@@ -12,6 +12,7 @@ export interface MemoryItem {
 
 export interface ProjectMemoryState {
   project_id: string;
+  project_name?: string;
   project_mode: string;
   framework: string;
   memory_summary: string;
@@ -53,12 +54,34 @@ export class ProjectMemory {
     // Fallback if not initialized yet
     return {
       project_id: 'default',
+      project_name: 'New Project',
       project_mode: 'Auto Detect',
       framework: 'Unknown',
       memory_summary: 'New Project',
       items: [],
       updated_at: Date.now()
     };
+  }
+
+  static clearMemory(): ProjectMemoryState {
+    const cleanState: ProjectMemoryState = {
+      project_id: 'proj_' + Math.random().toString(36).substring(2, 11) + Date.now().toString(36),
+      project_name: 'New Project',
+      project_mode: 'Auto Detect',
+      framework: 'Unknown',
+      memory_summary: 'Clean Project Started',
+      items: [],
+      updated_at: Date.now()
+    };
+    
+    this.state = cleanState;
+    if (typeof window !== 'undefined') {
+      localStorage.removeItem(this.STORAGE_KEY);
+      LocalDB.remove(STORE_MEMORY, this.STORAGE_KEY).catch(console.error);
+      this.saveMemory(cleanState);
+    }
+    
+    return cleanState;
   }
 
   static saveMemory(state: ProjectMemoryState) {

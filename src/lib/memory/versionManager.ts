@@ -10,27 +10,49 @@ export interface ProjectSnapshot {
 }
 
 export class VersionManager {
-  private static STORAGE_KEY = 'nova_versions';
   private static history: ProjectSnapshot[] = [];
   private static initialized = false;
 
+  private static getStorageKey(): string {
+    const mem = ProjectMemory.getMemory();
+    return mem.project_id ? `nova_versions_${mem.project_id}` : 'nova_versions';
+  }
+
   static async init() {
-    if (this.initialized) return;
+    const key = this.getStorageKey();
     if (typeof window !== 'undefined') {
       try {
-        const idbData = await LocalDB.get<ProjectSnapshot[]>(STORE_VERSIONS, this.STORAGE_KEY);
+        const idbData = await LocalDB.get<ProjectSnapshot[]>(STORE_VERSIONS, key);
         if (idbData) {
           this.history = idbData;
         } else {
-          const lsData = localStorage.getItem(this.STORAGE_KEY);
-          if (lsData) {
-            this.history = JSON.parse(lsData);
-            await LocalDB.set(STORE_VERSIONS, this.STORAGE_KEY, this.history);
+          // Backward compatibility check for old global key
+          const oldData = localStorage.getItem('nova_versions');
+          if (oldData && key === 'nova_versions_default') {
+             this.history = JSON.parse(oldData);
+             await LocalDB.set(STORE_VERSIONS, key, this.history);
+          } else {
+             const lsData = localStorage.getItem(key);
+             if (lsData) {
+               this.history = JSON.parse(lsData);
+               await LocalDB.set(STORE_VERSIONS, key, this.history);
+             } else {
+               this.history = [];
+             }
           }
         }
       } catch (e) {
         console.error("Failed to init VersionManager from IDB:", e);
       }
+      this.initialized = true;
+    }
+  }
+
+  static async loadProject(projectId: string) {
+    const key = `nova_versions_${projectId}`;
+    if (typeof window !== 'undefined') {
+      const idbData = await LocalDB.get<ProjectSnapshot[]>(STORE_VERSIONS, key);
+      this.history = idbData || [];
       this.initialized = true;
     }
   }
@@ -49,13 +71,12 @@ export class VersionManager {
     };
     
     this.history.push(snapshot);
+    const key = this.getStorageKey();
     if (typeof window !== 'undefined') {
-      // Temporarily Dual-Write
-      localStorage.setItem(this.STORAGE_KEY, JSON.stringify(this.history));
-      LocalDB.set(STORE_VERSIONS, this.STORAGE_KEY, this.history).catch(console.error);
+      localStorage.setItem(key, JSON.stringify(this.history));
+      LocalDB.set(STORE_VERSIONS, key, this.history).catch(console.error);
     }
     
-    // Auto-update stable version if state is passed
     if (previewState === 'passed') {
       ProjectMemory.markStableVersion(snapshot.id);
     } else if (previewState === 'failed') {
@@ -69,9 +90,10 @@ export class VersionManager {
     const target = this.history.find(s => s.id === id);
     if (target) {
       target.previewState = state;
+      const key = this.getStorageKey();
       if (typeof window !== 'undefined') {
-        localStorage.setItem(this.STORAGE_KEY, JSON.stringify(this.history));
-        LocalDB.set(STORE_VERSIONS, this.STORAGE_KEY, this.history).catch(console.error);
+        localStorage.setItem(key, JSON.stringify(this.history));
+        LocalDB.set(STORE_VERSIONS, key, this.history).catch(console.error);
       }
       
       if (state === 'passed') {
@@ -84,9 +106,10 @@ export class VersionManager {
 
   static clearHistory() {
     this.history = [];
+    const key = this.getStorageKey();
     if (typeof window !== 'undefined') {
-      localStorage.removeItem(this.STORAGE_KEY);
-      LocalDB.remove(STORE_VERSIONS, this.STORAGE_KEY).catch(console.error);
+      localStorage.removeItem(key);
+      LocalDB.remove(STORE_VERSIONS, key).catch(console.error);
     }
   }
 }
