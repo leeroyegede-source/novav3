@@ -10,9 +10,10 @@ interface BuilderTopBarProps {
   appMode: string;
   setAppMode: (mode: string) => void;
   userEmail?: string;
+  onLoadProject: (projId: string) => void;
 }
 
-export function BuilderTopBar({ onToggleRight, onToggleBottom, onOpenVersions, appMode, setAppMode, userEmail }: BuilderTopBarProps) {
+export function BuilderTopBar({ onToggleRight, onToggleBottom, onOpenVersions, appMode, setAppMode, userEmail, onLoadProject }: BuilderTopBarProps) {
   const [isHydrated, setIsHydrated] = useState(false);
   const [memory, setMemory] = useState<any>(null);
   const [recentOpen, setRecentOpen] = useState(false);
@@ -41,10 +42,7 @@ export function BuilderTopBar({ onToggleRight, onToggleBottom, onOpenVersions, a
   }, [recentOpen]);
 
   const handleLoadProject = (projId: string) => {
-    // We cannot fully load a different project if we don't have all the files.
-    // However, the instruction states "preserve current save/load behavior".
-    // Usually this requires a full workspace reload or page reload, but for the sake of UI we simulate it.
-    alert('Project loaded: ' + projId);
+    onLoadProject(projId);
     setRecentOpen(false);
   };
 

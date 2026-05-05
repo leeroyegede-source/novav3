@@ -124,21 +124,31 @@ export function BuilderLayout({ userEmail }: { userEmail?: string }) {
 
   const handleSave = () => {
     VersionManager.saveSnapshot(files, 'Manual Save');
+    
+    const mem = ProjectMemory.getMemory();
+    const projectId = mem.project_id;
+    const projectName = (mem as any).project_name || 'Untitled Project';
+
+    // Priority 2: IndexedDB secure full project storage
+    LocalDB.set(STORE_FILES, projectId, files).catch(console.error);
+    
+    // Priority 3: fallback/current session active state
     localStorage.setItem('nova_appMode', appMode);
     localStorage.setItem('nova_files', JSON.stringify(files));
     LocalDB.set(STORE_FILES, 'nova_active_files', files).catch(console.error);
+    
     setLogs(prev => [...prev, '[SYSTEM] Project saved manually to IndexedDB.']);
     
-    // Update recent projects list safely
+    // Update recent projects list safely (Metadata only)
     try {
-      const mem = ProjectMemory.getMemory();
       const recent = JSON.parse(localStorage.getItem('nova_recent_projects') || '[]');
-      const existingIdx = recent.findIndex((p: any) => p.id === mem.project_id);
+      const existingIdx = recent.findIndex((p: any) => p.id === projectId);
       const newProject = {
-        id: mem.project_id,
-        name: (mem as any).project_name || 'Untitled Project',
+        id: projectId,
+        name: projectName,
         mode: mem.project_mode || appMode,
-        time: Date.now()
+        time: Date.now(),
+        source: 'Saved Locally'
       };
       if (existingIdx >= 0) recent[existingIdx] = newProject;
       else recent.unshift(newProject);
@@ -146,6 +156,44 @@ export function BuilderLayout({ userEmail }: { userEmail?: string }) {
       alert('Project saved successfully!');
     } catch (err) {
       setLogs(prev => [...prev, '[ERROR] Failed to save project metadata.']);
+    }
+  };
+
+  const loadProject = async (projId: string) => {
+    try {
+      setLogs(prev => [...prev, `[SYSTEM] Loading project ${projId} from IndexedDB...`]);
+      const savedFiles = await LocalDB.get<Record<string, string>>(STORE_FILES, projId);
+      
+      if (savedFiles) {
+        setFiles(savedFiles);
+        
+        // Find metadata from recent projects list
+        const recentStr = localStorage.getItem('nova_recent_projects');
+        if (recentStr) {
+          const recent = JSON.parse(recentStr);
+          const meta = recent.find((p: any) => p.id === projId);
+          if (meta) {
+             setAppMode(meta.mode);
+             // Restore ProjectMemory project_id
+             const mem = ProjectMemory.getMemory();
+             mem.project_id = projId;
+             (mem as any).project_name = meta.name;
+             mem.project_mode = meta.mode;
+             ProjectMemory.saveMemory(mem);
+          }
+        }
+        
+        // Ensure active workspace reflects this newly loaded project
+        await LocalDB.set(STORE_FILES, 'nova_active_files', savedFiles);
+        localStorage.setItem('nova_files', JSON.stringify(savedFiles));
+        
+        setLogs(prev => [...prev, `[SYSTEM] Project loaded successfully.`]);
+      } else {
+        alert("Project files not found in local storage.");
+      }
+    } catch (e) {
+      console.error(e);
+      alert("Error loading project.");
     }
   };
 
@@ -525,6 +573,7 @@ export function BuilderLayout({ userEmail }: { userEmail?: string }) {
         appMode={appMode}
         setAppMode={handleModeChange}
         userEmail={userEmail}
+        onLoadProject={loadProject}
       />
       
       <div className="flex flex-1 overflow-hidden relative min-h-0 min-w-0 w-full">
