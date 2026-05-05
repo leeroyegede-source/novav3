@@ -4,13 +4,18 @@ export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
   const id = searchParams.get('id');
 
-  if (!id || !process.env.VERCEL_API_TOKEN) {
+  if (!id || !process.env.NOVA_VERCEL_TOKEN) {
     return NextResponse.json({ error: "Missing ID or token" }, { status: 400 });
   }
 
   try {
-    const res = await fetch(`https://api.vercel.com/v13/deployments/${id}`, {
-      headers: { "Authorization": `Bearer ${process.env.VERCEL_API_TOKEN}` }
+    let url = `https://api.vercel.com/v13/deployments/${id}`;
+    if (process.env.NOVA_VERCEL_TEAM_ID) {
+      url += `?teamId=${process.env.NOVA_VERCEL_TEAM_ID}`;
+    }
+
+    const res = await fetch(url, {
+      headers: { "Authorization": `Bearer ${process.env.NOVA_VERCEL_TOKEN}` }
     });
     
     const data = await res.json();

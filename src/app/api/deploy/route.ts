@@ -7,10 +7,10 @@ export async function POST(req: Request) {
     console.log(`[Deployment Agent] Initiating deploy to ${provider}`);
 
     // Validate Vercel Token
-    if (!process.env.VERCEL_API_TOKEN) {
+    if (!process.env.NOVA_VERCEL_TOKEN) {
       return NextResponse.json({
         success: false,
-        error: "VERCEL_API_TOKEN is missing. Please configure it in .env.local to deploy."
+        error: "NOVA_VERCEL_TOKEN is missing. Please configure it in .env.local to deploy."
       }, { status: 400 });
     }
 
@@ -67,16 +67,21 @@ export async function POST(req: Request) {
     if (isNextJs) framework = "nextjs";
     else if (isVite) framework = "vite";
 
-    const payload = {
-      name: "nova-ai-project",
+    const payload: any = {
+      name: process.env.NOVA_VERCEL_PROJECT_ID || "nova-ai-project",
       files: projectFiles,
       projectSettings: { framework }
     };
 
-    const vercelRes = await fetch("https://api.vercel.com/v13/deployments", {
+    let url = "https://api.vercel.com/v13/deployments";
+    if (process.env.NOVA_VERCEL_TEAM_ID) {
+      url += `?teamId=${process.env.NOVA_VERCEL_TEAM_ID}`;
+    }
+
+    const vercelRes = await fetch(url, {
       method: "POST",
       headers: {
-        "Authorization": `Bearer ${process.env.VERCEL_API_TOKEN}`,
+        "Authorization": `Bearer ${process.env.NOVA_VERCEL_TOKEN}`,
         "Content-Type": "application/json"
       },
       body: JSON.stringify(payload)
