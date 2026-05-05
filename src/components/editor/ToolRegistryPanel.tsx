@@ -15,6 +15,8 @@ export function ToolRegistryPanel({ files, appMode, onInject, onLog }: ToolRegis
   
   const [viewMode, setViewMode] = useState<'compact' | 'list' | 'grid'>('compact');
   const [searchQuery, setSearchQuery] = useState('');
+  const [filterTab, setFilterTab] = useState<'all' | 'installed' | 'recommended'>('all');
+  const [categoryFilter, setCategoryFilter] = useState('All');
 
   // Normalize appMode string to match tool registry modes
   let mappedMode = appMode.toLowerCase().replace(/[^a-z0-9]/g, '-');
@@ -37,7 +39,22 @@ export function ToolRegistryPanel({ files, appMode, onInject, onLog }: ToolRegis
     }
   };
 
-  const filteredTools = allTools.filter(t => t.name.toLowerCase().includes(searchQuery.toLowerCase()) || t.category.toLowerCase().includes(searchQuery.toLowerCase()));
+  const categories = ['All', ...Array.from(new Set(allTools.map(t => t.category)))];
+
+  const filteredTools = allTools.filter(t => {
+    const matchesSearch = t.name.toLowerCase().includes(searchQuery.toLowerCase()) || t.category.toLowerCase().includes(searchQuery.toLowerCase());
+    const matchesCategory = categoryFilter === 'All' || t.category === categoryFilter;
+    
+    let isInstalled = false;
+    try { isInstalled = t.isInstalled(files); } catch(e) {}
+    
+    const matchesTab = 
+      filterTab === 'all' ? true :
+      filterTab === 'installed' ? isInstalled :
+      filterTab === 'recommended' ? !t.incompatibleModes.includes(mappedMode) : true;
+      
+    return matchesSearch && matchesCategory && matchesTab;
+  });
 
   return (
     <div className="flex-1 flex flex-col h-full bg-slate-950 border-r border-slate-800 text-slate-300">
@@ -54,15 +71,29 @@ export function ToolRegistryPanel({ files, appMode, onInject, onLog }: ToolRegis
              <button onClick={() => setViewMode('grid')} className={`p-1 rounded ${viewMode === 'grid' ? 'bg-slate-600 text-white' : 'text-slate-400 hover:text-slate-200'}`} title="Grid View"><LayoutGrid className="w-3.5 h-3.5" /></button>
           </div>
         </div>
-        <div className="relative">
-           <Search className="w-3.5 h-3.5 text-slate-500 absolute left-2.5 top-1/2 -translate-y-1/2" />
-           <input 
-             type="text" 
-             placeholder="Search tools or categories..." 
-             value={searchQuery}
-             onChange={e => setSearchQuery(e.target.value)}
-             className="w-full bg-slate-800 border border-slate-700 rounded pl-8 pr-3 py-1.5 text-xs text-slate-200 outline-none focus:border-indigo-500 transition-colors placeholder:text-slate-500"
-           />
+        <div className="flex items-center gap-2 mt-1">
+           <div className="relative flex-1">
+              <Search className="w-3.5 h-3.5 text-slate-500 absolute left-2.5 top-1/2 -translate-y-1/2" />
+              <input 
+                type="text" 
+                placeholder="Search tools..." 
+                value={searchQuery}
+                onChange={e => setSearchQuery(e.target.value)}
+                className="w-full bg-slate-800 border border-slate-700 rounded pl-8 pr-3 py-1.5 text-xs text-slate-200 outline-none focus:border-indigo-500 transition-colors placeholder:text-slate-500"
+              />
+           </div>
+           <select 
+             value={categoryFilter} 
+             onChange={e => setCategoryFilter(e.target.value)}
+             className="bg-slate-800 border border-slate-700 rounded px-2 py-1.5 text-xs text-slate-200 outline-none focus:border-indigo-500"
+           >
+             {categories.map(c => <option key={c} value={c}>{c}</option>)}
+           </select>
+        </div>
+        <div className="flex border-b border-slate-800">
+           <button onClick={() => setFilterTab('all')} className={`px-3 py-1.5 text-[10px] font-bold border-b-2 ${filterTab === 'all' ? 'border-indigo-500 text-indigo-400' : 'border-transparent text-slate-500 hover:text-slate-300'}`}>All</button>
+           <button onClick={() => setFilterTab('installed')} className={`px-3 py-1.5 text-[10px] font-bold border-b-2 ${filterTab === 'installed' ? 'border-indigo-500 text-indigo-400' : 'border-transparent text-slate-500 hover:text-slate-300'}`}>Installed</button>
+           <button onClick={() => setFilterTab('recommended')} className={`px-3 py-1.5 text-[10px] font-bold border-b-2 ${filterTab === 'recommended' ? 'border-indigo-500 text-indigo-400' : 'border-transparent text-slate-500 hover:text-slate-300'}`}>Recommended</button>
         </div>
       </div>
       
