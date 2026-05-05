@@ -24,7 +24,7 @@ import { PreviewPanel } from '@/components/preview/PreviewPanel';
 import { AppModeSelector } from '@/components/AppModeSelector';
 import { LogsPanel } from '@/components/preview/LogsPanel';
 import { RuntimeIndicator } from '@/components/preview/RuntimeIndicator';
-import { Upload, FolderUp, Rocket, Loader2, DownloadCloud, Trash2, StopCircle, GitBranch, Plus, Save, Clock } from 'lucide-react';
+import { Upload, FolderUp, Rocket, Loader2, DownloadCloud, Trash2, StopCircle, GitBranch, Plus, Save, Clock, MessageSquare, Folder, Code, Terminal, Play, MoreHorizontal } from 'lucide-react';
 
 export function BuilderLayout({ userEmail }: { userEmail?: string }) {
   const [appMode, setAppMode] = useState("Auto Detect");
@@ -43,6 +43,7 @@ export function BuilderLayout({ userEmail }: { userEmail?: string }) {
   const deployIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
   const [errorCount, setErrorCount] = useState(0);
+  const [mobileTab, setMobileTab] = useState<'chat' | 'files' | 'editor' | 'preview' | 'terminal'>('chat');
 
   useEffect(() => {
     // Storage initialization is handled by initStorage below.
@@ -528,8 +529,8 @@ export function BuilderLayout({ userEmail }: { userEmail?: string }) {
       
       <div className="flex flex-1 overflow-hidden relative">
         
-        <div className="flex-1 flex overflow-hidden relative">
-          <div className="w-[300px] border-r border-slate-800 flex flex-col z-20 shadow-xl bg-slate-900 shrink-0">
+        <div className="flex-1 flex flex-col md:flex-row overflow-hidden relative pb-16 md:pb-0">
+          <div className={`absolute inset-0 md:relative w-full md:w-[300px] border-r border-slate-800 flex-col z-20 shadow-xl bg-slate-900 shrink-0 ${mobileTab === 'chat' ? 'flex' : 'hidden md:flex'}`}>
             <ChatPanel 
               files={files} 
               setFiles={setFiles} 
@@ -539,11 +540,11 @@ export function BuilderLayout({ userEmail }: { userEmail?: string }) {
             />
           </div>
       
-      <div className="flex-1 flex flex-col z-10">
-        <div className="flex-1 flex">
-          <div className="w-[420px] border-r border-slate-800 bg-slate-950 flex flex-col">
-            <div className="p-2 border-b border-slate-800 flex gap-3 items-center">
-              <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">EF</span>
+      <div className={`absolute inset-0 md:relative flex-1 flex-col z-10 bg-slate-950 ${mobileTab === 'files' || mobileTab === 'editor' || mobileTab === 'terminal' ? 'flex' : 'hidden md:flex'}`}>
+        <div className="flex-1 flex flex-col md:flex-row">
+          <div className={`absolute inset-0 md:relative w-full md:w-[320px] lg:w-[420px] border-r border-slate-800 bg-slate-950 flex-col z-20 ${mobileTab === 'files' ? 'flex' : 'hidden md:flex'}`}>
+            <div className="p-2 border-b border-slate-800 flex flex-wrap gap-2 md:gap-3 items-center">
+              <span className="text-xs font-bold text-slate-400 uppercase tracking-wider hidden lg:block">EF</span>
               <select 
                 value={viewMode}
                 onChange={(e) => setViewMode(e.target.value as any)}
@@ -596,7 +597,7 @@ export function BuilderLayout({ userEmail }: { userEmail?: string }) {
             </div>
             <FileExplorer files={files} activeFile={activeFile} setActiveFile={setActiveFile} />
           </div>
-          <div className="flex-1 bg-slate-950 flex flex-col">
+          <div className={`absolute inset-0 md:relative flex-1 bg-slate-950 flex-col z-10 ${mobileTab === 'editor' ? 'flex' : 'hidden md:flex'}`}>
             {viewMode === 'canvas' ? (
                <ArchitectureCanvas triggerGeneration={(prompt) => executeAgentPrompt(prompt, files, true)} files={files} />
             ) : viewMode === 'versions' ? (
@@ -675,18 +676,18 @@ export function BuilderLayout({ userEmail }: { userEmail?: string }) {
             )}
           </div>
         </div>
-        <div className="h-[250px] border-t border-slate-800 bg-slate-950 flex flex-col">
+        <div className={`absolute inset-0 md:relative md:h-[250px] border-t border-slate-800 bg-slate-950 flex-col z-30 ${mobileTab === 'terminal' ? 'flex' : 'hidden md:flex'}`}>
            <LogsPanel logs={logs} onCommand={handleTerminalCommand} onSelfHeal={handleSelfHeal} />
         </div>
       </div>
       
-      <div className="w-[45%] flex flex-col border-l border-slate-800 bg-black z-20 shadow-xl">
-        <div className="h-12 border-b border-slate-800 flex items-center px-4 justify-between bg-slate-900">
-           <div className="flex items-center gap-2">
-             <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+      <div className={`absolute inset-0 md:relative w-full md:w-[45%] flex-col border-l border-slate-800 bg-black z-30 shadow-xl ${mobileTab === 'preview' ? 'flex' : 'hidden md:flex'}`}>
+        <div className="h-12 border-b border-slate-800 flex items-center px-4 justify-between bg-slate-900 shrink-0 overflow-x-auto whitespace-nowrap">
+           <div className="flex items-center gap-2 mr-4">
+             <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse shrink-0" />
              <span className="text-sm font-bold tracking-tight">Live Preview</span>
            </div>
-           <div className="flex items-center gap-4">
+           <div className="flex items-center gap-2 md:gap-4 shrink-0">
              {deployUrl && (
                <a href={deployUrl} target="_blank" rel="noreferrer" className="text-xs text-emerald-400 hover:text-emerald-300 font-mono bg-emerald-500/10 px-3 py-1 rounded-full border border-emerald-500/20 transition-colors max-w-[200px] truncate">
                  {deployUrl}
@@ -731,7 +732,32 @@ export function BuilderLayout({ userEmail }: { userEmail?: string }) {
              }}
            />
         </div>
-        </div>
+      </div>
+      
+      {/* Mobile Tab Bar */}
+      <div className="md:hidden absolute bottom-0 left-0 right-0 h-16 bg-slate-900 border-t border-slate-800 flex items-center justify-between px-2 z-50">
+        <button onClick={() => setMobileTab('chat')} className={`flex-1 flex flex-col items-center justify-center gap-1 ${mobileTab === 'chat' ? 'text-indigo-400' : 'text-slate-500 hover:text-slate-300'}`}>
+          <MessageSquare className="w-5 h-5" />
+          <span className="text-[10px] font-medium">Chat</span>
+        </button>
+        <button onClick={() => setMobileTab('files')} className={`flex-1 flex flex-col items-center justify-center gap-1 ${mobileTab === 'files' ? 'text-indigo-400' : 'text-slate-500 hover:text-slate-300'}`}>
+          <Folder className="w-5 h-5" />
+          <span className="text-[10px] font-medium">Files</span>
+        </button>
+        <button onClick={() => setMobileTab('editor')} className={`flex-1 flex flex-col items-center justify-center gap-1 ${mobileTab === 'editor' ? 'text-indigo-400' : 'text-slate-500 hover:text-slate-300'}`}>
+          <Code className="w-5 h-5" />
+          <span className="text-[10px] font-medium">Code</span>
+        </button>
+        <button onClick={() => setMobileTab('preview')} className={`flex-1 flex flex-col items-center justify-center gap-1 ${mobileTab === 'preview' ? 'text-indigo-400' : 'text-slate-500 hover:text-slate-300'}`}>
+          <Play className="w-5 h-5" />
+          <span className="text-[10px] font-medium">Preview</span>
+        </button>
+        <button onClick={() => setMobileTab('terminal')} className={`flex-1 flex flex-col items-center justify-center gap-1 ${mobileTab === 'terminal' ? 'text-indigo-400' : 'text-slate-500 hover:text-slate-300'}`}>
+          <Terminal className="w-5 h-5" />
+          <span className="text-[10px] font-medium">Terminal</span>
+        </button>
+      </div>
+        
         </div>
       </div>
     </div>

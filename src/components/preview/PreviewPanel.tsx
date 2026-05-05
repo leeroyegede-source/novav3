@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { SandpackProvider, SandpackPreview, SandpackConsole } from "@codesandbox/sandpack-react";
-import { Loader2, Play, Square, RefreshCw, Terminal, Globe } from 'lucide-react';
+import { Loader2, Play, Square, RefreshCw, Terminal, Globe, Monitor, Smartphone, TabletIcon, Maximize } from 'lucide-react';
 
 export function PreviewPanel({ files, appMode, onLogsUpdate }: { files: Record<string, string>, appMode: string, onLogsUpdate?: (logs: string[]) => void }) {
   const [containerInfo, setContainerInfo] = useState<any>(null);
@@ -11,6 +11,20 @@ export function PreviewPanel({ files, appMode, onLogsUpdate }: { files: Record<s
   const [showLogs, setShowLogs] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const iframeRef = useRef<HTMLIFrameElement>(null);
+  const [deviceMode, setDeviceMode] = useState<'full' | 'desktop' | 'tablet' | 'mobile'>('full');
+  
+  useEffect(() => {
+    const saved = localStorage.getItem('nova_device_preview_mode');
+    if (saved && ['full', 'desktop', 'tablet', 'mobile'].includes(saved)) {
+      setDeviceMode(saved as any);
+    }
+  }, []);
+
+  const handleDeviceMode = (mode: 'full' | 'desktop' | 'tablet' | 'mobile') => {
+    setDeviceMode(mode);
+    localStorage.setItem('nova_device_preview_mode', mode);
+  };
+
   // Default project id for the current session
   const projectId = "nova-project-1";
 
@@ -139,6 +153,21 @@ export function PreviewPanel({ files, appMode, onLogsUpdate }: { files: Record<s
               <button onClick={() => setShowLogs(!showLogs)} title="Toggle Logs" className={`p-1.5 hover:bg-slate-700 rounded transition-colors ${showLogs ? 'text-indigo-400 bg-slate-700' : 'text-slate-300'}`}>
                 <Terminal className="w-4 h-4" />
               </button>
+              <div className="w-px h-4 bg-slate-700 mx-1" />
+              <div className="flex items-center bg-slate-950 rounded border border-slate-700 overflow-hidden">
+                <button onClick={() => handleDeviceMode('full')} title="Full Screen" className={`p-1.5 transition-colors ${deviceMode === 'full' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'}`}>
+                  <Maximize className="w-3.5 h-3.5" />
+                </button>
+                <button onClick={() => handleDeviceMode('desktop')} title="Desktop (1440px)" className={`p-1.5 transition-colors border-l border-slate-700 ${deviceMode === 'desktop' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'}`}>
+                  <Monitor className="w-3.5 h-3.5" />
+                </button>
+                <button onClick={() => handleDeviceMode('tablet')} title="Tablet (768px)" className={`p-1.5 transition-colors border-l border-slate-700 ${deviceMode === 'tablet' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'}`}>
+                  <TabletIcon className="w-3.5 h-3.5" />
+                </button>
+                <button onClick={() => handleDeviceMode('mobile')} title="Mobile (390px)" className={`p-1.5 transition-colors border-l border-slate-700 ${deviceMode === 'mobile' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'}`}>
+                  <Smartphone className="w-3.5 h-3.5" />
+                </button>
+              </div>
             </>
           )}
         </div>
@@ -186,26 +215,37 @@ export function PreviewPanel({ files, appMode, onLogsUpdate }: { files: Record<s
                   <RefreshCw className="w-3.5 h-3.5" />
                </button>
             </div>
-            <iframe 
-              ref={iframeRef} 
-              src={containerInfo.previewUrl + currentPath} 
-              className="w-full flex-1 border-none bg-white" 
-              title="Preview" 
-              onLoad={(e) => {
-                try {
-                  const frame = e.target as HTMLIFrameElement;
-                  if (frame.contentWindow && frame.contentWindow.location) {
-                     const path = frame.contentWindow.location.pathname;
-                     if (path && path !== currentPath && path !== 'blank') {
-                        setCurrentPath(path);
-                        setUrlInput(containerInfo.previewUrl + path);
-                     }
-                  }
-                } catch (err) {
-                  // Ignore CORS SOP errors if ports don't match
-                }
-              }}
-            />
+            <div className="flex-1 overflow-auto flex justify-center bg-slate-200">
+              <div 
+                className={`transition-all duration-300 ease-in-out bg-white flex flex-col ${
+                  deviceMode === 'full' ? 'w-full h-full' : 
+                  deviceMode === 'desktop' ? 'w-[1440px] max-w-full h-full shadow-2xl' :
+                  deviceMode === 'tablet' ? 'w-[768px] max-w-full h-[1024px] max-h-full shadow-2xl my-auto rounded-md overflow-hidden ring-1 ring-slate-300' :
+                  'w-[390px] max-w-full h-[844px] max-h-full shadow-2xl my-auto rounded-[3rem] overflow-hidden ring-8 ring-slate-800'
+                }`}
+              >
+                <iframe 
+                  ref={iframeRef} 
+                  src={containerInfo.previewUrl + currentPath} 
+                  className="w-full flex-1 border-none bg-white" 
+                  title="Preview" 
+                  onLoad={(e) => {
+                    try {
+                      const frame = e.target as HTMLIFrameElement;
+                      if (frame.contentWindow && frame.contentWindow.location) {
+                         const path = frame.contentWindow.location.pathname;
+                         if (path && path !== currentPath && path !== 'blank') {
+                            setCurrentPath(path);
+                            setUrlInput(containerInfo.previewUrl + path);
+                         }
+                      }
+                    } catch (err) {
+                      // Ignore CORS SOP errors if ports don't match
+                    }
+                  }}
+                />
+              </div>
+            </div>
           </div>
         ) : (
           !booting && !error && (

@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { ProjectMemory } from '@/lib/memory/projectMemory';
 import { VersionManager } from '@/lib/memory/versionManager';
-import { Save, Play, CheckCircle2, AlertTriangle, Cloud, RotateCcw, LayoutPanelLeft, PanelBottom, Settings2, History, GitBranch, FastForward } from 'lucide-react';
+import { Save, Play, CheckCircle2, AlertTriangle, Cloud, RotateCcw, LayoutPanelLeft, PanelBottom, Settings2, History, GitBranch, FastForward, MoreHorizontal } from 'lucide-react';
 
 interface BuilderTopBarProps {
   onToggleRight: () => void;
@@ -18,6 +18,7 @@ export function BuilderTopBar({ onToggleRight, onToggleBottom, onOpenVersions, a
   const [recentOpen, setRecentOpen] = useState(false);
   const [recentProjects, setRecentProjects] = useState<any[]>([]);
   const [timeline, setTimeline] = useState({ max: 0, current: 0 });
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   useEffect(() => {
     const handleUpdate = (e: any) => setTimeline(e.detail);
@@ -58,12 +59,13 @@ export function BuilderTopBar({ onToggleRight, onToggleBottom, onOpenVersions, a
             <span className="text-white font-bold text-[10px]">NV</span>
           </div>
           <div>
-            <h1 className="text-xs font-bold text-slate-200 leading-tight">Nova Workspace</h1>
+            <h1 className="text-xs font-bold text-slate-200 leading-tight hidden md:block">Nova Workspace</h1>
+            <h1 className="text-xs font-bold text-slate-200 leading-tight md:hidden">NOVA</h1>
           </div>
         </div>
 
         {userEmail && (
-          <div className="flex items-center gap-2 ml-4">
+          <div className="hidden md:flex items-center gap-2 ml-4">
             <span className="text-[10px] text-slate-400 border border-slate-700 bg-slate-800 px-2 py-0.5 rounded-full">{userEmail}</span>
             <button 
               onClick={async () => {
@@ -78,7 +80,7 @@ export function BuilderTopBar({ onToggleRight, onToggleBottom, onOpenVersions, a
           </div>
         )}
 
-        <div className="relative ml-4">
+        <div className="relative ml-2 md:ml-4 hidden md:block">
           <button onClick={() => setRecentOpen(!recentOpen)} className="text-[10px] font-bold text-slate-400 hover:text-slate-200 bg-slate-800 hover:bg-slate-700 px-3 py-1.5 rounded transition-colors flex items-center gap-1.5">
              <History className="w-3 h-3" /> Recent
           </button>
@@ -105,9 +107,9 @@ export function BuilderTopBar({ onToggleRight, onToggleBottom, onOpenVersions, a
           )}
         </div>
         
-        <div className="h-4 w-px bg-slate-800 mx-2" />
+        <div className="hidden md:block h-4 w-px bg-slate-800 mx-2" />
         
-        <div className="flex items-center gap-3 text-[10px] font-bold text-slate-400">
+        <div className="hidden md:flex items-center gap-3 text-[10px] font-bold text-slate-400">
           <div className="flex items-center gap-1.5">
             <div className={`w-1.5 h-1.5 rounded-full ${isStable ? 'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]' : 'bg-slate-600'}`} />
             Stable
@@ -127,14 +129,18 @@ export function BuilderTopBar({ onToggleRight, onToggleBottom, onOpenVersions, a
               ))}
           </select>
         </div>
+        
+        <div className="md:hidden flex items-center ml-2">
+           <span className="text-[10px] font-bold bg-slate-800 border border-slate-700 text-slate-300 px-2 py-1 rounded truncate max-w-[100px]">{appMode}</span>
+        </div>
       </div>
 
       <div className="flex items-center gap-2">
-        <button onClick={onOpenVersions} className="text-[10px] font-bold bg-slate-800 hover:bg-slate-700 text-slate-300 px-3 py-1.5 rounded flex items-center gap-1.5 transition-colors">
+        <button onClick={onOpenVersions} className="hidden md:flex text-[10px] font-bold bg-slate-800 hover:bg-slate-700 text-slate-300 px-3 py-1.5 rounded items-center gap-1.5 transition-colors">
           <GitBranch className="w-3 h-3" /> Versions
         </button>
         {timeline.max > 0 && (
-          <div className="flex items-center gap-2 bg-slate-800 px-2 py-1 rounded h-7 border border-slate-700" title="Time-Travel Debugger">
+          <div className="hidden md:flex items-center gap-2 bg-slate-800 px-2 py-1 rounded h-7 border border-slate-700" title="Time-Travel Debugger">
             <History className="w-3 h-3 text-indigo-400" />
             <input 
               type="range" 
@@ -152,14 +158,56 @@ export function BuilderTopBar({ onToggleRight, onToggleBottom, onOpenVersions, a
           </div>
         )}
         
-        <div className="h-4 w-px bg-slate-800 mx-2" />
+        <div className="hidden md:block h-4 w-px bg-slate-800 mx-2" />
         
-        <button onClick={onToggleBottom} className="p-1.5 text-slate-500 hover:text-slate-300 hover:bg-slate-800 rounded transition-colors" title="Toggle Bottom Panel">
+        <button onClick={onToggleBottom} className="hidden md:block p-1.5 text-slate-500 hover:text-slate-300 hover:bg-slate-800 rounded transition-colors" title="Toggle Bottom Panel">
           <PanelBottom className="w-4 h-4" />
         </button>
-        <button onClick={onToggleRight} className="p-1.5 text-slate-500 hover:text-slate-300 hover:bg-slate-800 rounded transition-colors" title="Toggle Right Panel">
+        <button onClick={onToggleRight} className="hidden md:block p-1.5 text-slate-500 hover:text-slate-300 hover:bg-slate-800 rounded transition-colors" title="Toggle Right Panel">
           <Settings2 className="w-4 h-4" />
         </button>
+        
+        <div className="relative md:hidden">
+          <button onClick={() => setMobileMenuOpen(!mobileMenuOpen)} className="p-1.5 text-slate-400 hover:text-slate-200 bg-slate-800 rounded">
+            <MoreHorizontal className="w-4 h-4" />
+          </button>
+          {mobileMenuOpen && (
+            <div className="absolute top-full right-0 mt-2 w-48 bg-slate-900 border border-slate-700 rounded-lg shadow-xl z-50 p-2 flex flex-col gap-2">
+              {userEmail && (
+                <div className="border-b border-slate-800 pb-2 mb-1 flex flex-col gap-1">
+                  <span className="text-[10px] text-slate-400 truncate">{userEmail}</span>
+                  <button 
+                    onClick={async () => {
+                      const { supabase } = await import('@/lib/supabaseClient');
+                      await supabase.auth.signOut();
+                      window.location.href = '/login';
+                    }}
+                    className="text-[10px] text-left text-slate-300 hover:text-white"
+                  >
+                    Logout
+                  </button>
+                </div>
+              )}
+              <button onClick={() => { setRecentOpen(!recentOpen); setMobileMenuOpen(false); }} className="text-left text-xs font-bold text-slate-300 flex items-center gap-2">
+                 <History className="w-3 h-3" /> Recent Projects
+              </button>
+              <button onClick={() => { onOpenVersions(); setMobileMenuOpen(false); }} className="text-left text-xs font-bold text-slate-300 flex items-center gap-2">
+                 <GitBranch className="w-3 h-3" /> Versions
+              </button>
+              <div className="border-t border-slate-800 pt-2 mt-1">
+                <select 
+                    value={appMode} 
+                    onChange={(e) => setAppMode(e.target.value)}
+                    className="w-full bg-slate-800 text-slate-200 text-[11px] font-bold border border-slate-700 rounded px-2 py-1 outline-none"
+                >
+                    {["Auto Detect", "React / Vite", "Next.js", "Node / Express", "PHP", "Laravel", "Static Website", "API Only"].map(m => (
+                      <option key={m} value={m} className="bg-slate-900">{m}</option>
+                    ))}
+                </select>
+              </div>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );
