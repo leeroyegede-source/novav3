@@ -161,126 +161,159 @@ export function BuilderLayout({ userEmail }: { userEmail?: string }) {
 
     const { data: sessionData } = await supabase.auth.getSession();
     const user = sessionData?.session?.user;
-    if (!user) {
-      alert("You must be logged in to save projects to the cloud.");
-      return;
+    
+    let source = 'indexeddb';
+    let saveError = null;
+
+    if (user) {
+      setLogs(prev => [...prev, '[SYSTEM] Saving to Supabase cloud...']);
+      try {
+        const { error: projError } = await supabase.from('projects').upsert({
+          id: projectId,
+          user_id: user.id,
+          name: projectName,
+          app_mode: finalMode,
+          source: 'supabase',
+          updated_at: new Date().toISOString()
+        }, { onConflict: 'id' });
+        
+        if (projError) throw projError;
+
+        await supabase.from('project_files').delete().eq('project_id', projectId);
+        
+        const fileInserts = Object.entries(targetFiles).map(([file_path, content]) => ({
+          project_id: projectId,
+          file_path,
+          content
+        }));
+        
+        if (fileInserts.length > 0) {
+          const { error: filesError } = await supabase.from('project_files').insert(fileInserts);
+          if (filesError) throw filesError;
+        }
+
+        await supabase.from('project_memory').upsert({
+          project_id: projectId,
+          memory_summary: mem.memory_summary || '',
+          updated_at: new Date().toISOString()
+        }, { onConflict: 'project_id' });
+
+        source = 'supabase';
+      } catch (err: any) {
+        saveError = err.message;
+        setLogs(prev => [...prev, `[ERROR] Supabase Save Failed: ${err.message}`]);
+      }
+    } else {
+      setLogs(prev => [...prev, '[SYSTEM] Not logged in to Supabase. Saving locally...']);
     }
 
-    setLogs(prev => [...prev, '[SYSTEM] Saving to Supabase cloud...']);
-
-    try {
-      const { error: projError } = await supabase.from('projects').upsert({
-        id: projectId,
-        user_id: user.id,
-        name: projectName,
-        app_mode: finalMode,
-        source: 'Saved via Builder',
-        updated_at: new Date().toISOString()
-      }, { onConflict: 'id' });
-      
-      if (projError) throw projError;
-
-      await supabase.from('project_files').delete().eq('project_id', projectId);
-      
-      const fileInserts = Object.entries(targetFiles).map(([file_path, content]) => ({
-        project_id: projectId,
-        file_path,
-        content
-      }));
-      
-      if (fileInserts.length > 0) {
-        const { error: filesError } = await supabase.from('project_files').insert(fileInserts);
-        if (filesError) throw filesError;
+    if (source === 'indexeddb') {
+      try {
+        await LocalDB.set(STORE_FILES, projectId, targetFiles);
+        setLogs(prev => [...prev, '[SYSTEM] Saved to local IndexedDB.']);
+      } catch(e) {
+        console.error(e);
       }
+    }
 
-      await supabase.from('project_memory').upsert({
-        project_id: projectId,
-        memory_summary: mem.memory_summary || '',
-        updated_at: new Date().toISOString()
-      }, { onConflict: 'project_id' });
+    VersionManager.saveSnapshot(targetFiles, 'Manual Save');
 
-      VersionManager.saveSnapshot(targetFiles, 'Manual Save');
-
-      const recent = JSON.parse(localStorage.getItem('nova_recent_projects') || '[]');
-      const existingIdx = recent.findIndex((p: any) => p.id === projectId);
-      const newProject = {
-        id: projectId,
-        name: projectName,
-        mode: finalMode,
-        time: Date.now(),
-        source: 'Supabase Cloud'
-      };
-      if (existingIdx >= 0) recent[existingIdx] = newProject;
-      else recent.unshift(newProject);
-      localStorage.setItem('nova_recent_projects', JSON.stringify(recent));
-      
-      localStorage.setItem('nova_appMode', finalMode);
-      
-      window.dispatchEvent(new CustomEvent('nova-recent-updated'));
-      setLogs(prev => [...prev, '[SYSTEM] Project saved successfully to Supabase!']);
-      if (!targetName) alert('Project saved successfully to Cloud!');
-    } catch (err: any) {
-      console.error(err);
-      setLogs(prev => [...prev, `[ERROR] Supabase Save Failed: ${err.message}`]);
-      alert(`Supabase Save Failed: ${err.message}`);
+    const recent = JSON.parse(localStorage.getItem('nova_recent_projects') || '[]');
+    const existingIdx = recent.findIndex((p: any) => p.id === projectId);
+    const newProject = {
+      id: projectId,
+      name: projectName,
+      mode: finalMode,
+      time: Date.now(),
+      source: source
+    };
+    if (existingIdx >= 0) recent[existingIdx] = newProject;
+    else recent.unshift(newProject);
+    localStorage.setItem('nova_recent_projects', JSON.stringify(recent));
+    localStorage.setItem('nova_appMode', finalMode);
+    
+    window.dispatchEvent(new CustomEvent('nova-recent-updated'));
+    
+    if (!targetName) {
+      if (source === 'supabase') {
+        setLogs(prev => [...prev, '[SYSTEM] Project saved successfully to Supabase!']);
+        alert('Project saved successfully to Cloud!');
+      } else {
+        alert(saveError ? `Saved locally. Supabase sync failed: ${saveError}` : 'Saved locally to IndexedDB.');
+      }
     }
   };
 
   const loadProject = async (projId: string) => {
     try {
-      setLogs(prev => [...prev, `[SYSTEM] Loading project ${projId} from Supabase...`]);
-      
-      const { data: filesData, error } = await supabase
-        .from('project_files')
-        .select('file_path, content')
-        .eq('project_id', projId);
+      const recentStr = localStorage.getItem('nova_recent_projects');
+      let meta: any = null;
+      if (recentStr) {
+        const recent = JSON.parse(recentStr);
+        meta = recent.find((p: any) => p.id === projId);
+      }
 
-      if (error) throw error;
+      const source = meta?.source || 'indexeddb';
+      setLogs(prev => [...prev, `[SYSTEM] Loading project ${projId} from ${source}...`]);
       
-      if (filesData && filesData.length > 0) {
-        const savedFiles: Record<string, string> = {};
-        filesData.forEach(f => {
-          savedFiles[f.file_path] = f.content;
-        });
+      let savedFiles: Record<string, string> | null = null;
+      
+      if (source === 'supabase') {
+        const { data: filesData, error } = await supabase
+          .from('project_files')
+          .select('file_path, content')
+          .eq('project_id', projId);
+
+        if (error) {
+           if (error.code === '42P01') {
+              throw new Error("Supabase project tables are not set up yet. Run the project storage SQL in Supabase.");
+           }
+           throw error;
+        }
         
+        if (filesData && filesData.length > 0) {
+          savedFiles = {};
+          filesData.forEach(f => {
+            savedFiles![f.file_path] = f.content;
+          });
+        }
+      } else {
+        savedFiles = await LocalDB.get<Record<string, string>>(STORE_FILES, projId);
+      }
+      
+      if (savedFiles) {
         setFiles(savedFiles);
-        
-        const recentStr = localStorage.getItem('nova_recent_projects');
-        if (recentStr) {
-          const recent = JSON.parse(recentStr);
-          const meta = recent.find((p: any) => p.id === projId);
-          if (meta) {
-             setAppMode(meta.mode);
-             const mem = ProjectMemory.getMemory();
-             mem.project_id = projId;
-             (mem as any).project_name = meta.name;
-             mem.project_mode = meta.mode;
-             
-             // Fetch project memory
-             supabase.from('project_memory').select('memory_summary').eq('project_id', projId).single().then(({ data }) => {
-                if (data && data.memory_summary) {
-                   mem.memory_summary = data.memory_summary;
-                }
+        if (meta) {
+           setAppMode(meta.mode);
+           const mem = ProjectMemory.getMemory();
+           mem.project_id = projId;
+           (mem as any).project_name = meta.name;
+           mem.project_mode = meta.mode;
+           
+           if (source === 'supabase') {
+             supabase.from('project_memory').select('memory_summary').eq('project_id', projId).single().then(({ data, error }) => {
+                if (!error && data && data.memory_summary) mem.memory_summary = data.memory_summary;
                 ProjectMemory.saveMemory(mem);
              });
-
-          }
+           } else {
+             ProjectMemory.saveMemory(mem);
+           }
         }
         
         await VersionManager.loadProject(projId);
         setShowStartScreen(false);
-        setLogs(prev => [...prev, `[SYSTEM] Project loaded successfully from Supabase.`]);
+        setLogs(prev => [...prev, `[SYSTEM] Project loaded successfully.`]);
       } else {
-        alert("Project files not found in Supabase.");
+        alert("Project files not found.");
       }
     } catch (e: any) {
       console.error(e);
-      alert(`Error loading project from Supabase: ${e.message}`);
+      alert(e.message);
     }
   };
 
   const deleteProject = async (projId: string) => {
-    if (!window.confirm("Are you sure you want to delete this project from the cloud?")) return;
+    if (!window.confirm("Are you sure you want to delete this project?")) return;
     try {
       const mem = ProjectMemory.getMemory();
       if (mem.project_id === projId) {
@@ -288,18 +321,84 @@ export function BuilderLayout({ userEmail }: { userEmail?: string }) {
         return;
       }
       
-      const { error } = await supabase.from('projects').delete().eq('id', projId);
-      if (error) throw error;
-      
       const recent = JSON.parse(localStorage.getItem('nova_recent_projects') || '[]');
+      const meta = recent.find((p: any) => p.id === projId);
+      const source = meta?.source || 'unknown';
+      
+      if (source === 'supabase') {
+        const { error } = await supabase.from('projects').delete().eq('id', projId);
+        if (error) {
+           if (error.code === '42P01') {
+              alert("Supabase project tables are not set up yet. Run the project storage SQL in Supabase.");
+           } else {
+              throw error;
+           }
+        }
+      } else if (source === 'indexeddb' || source === 'local' || source === 'unknown') {
+        await LocalDB.remove(STORE_FILES, projId);
+        // Also attempt supabase delete if unknown just in case
+        if (source === 'unknown') supabase.from('projects').delete().eq('id', projId).then(() => {});
+      }
+      
       const filtered = recent.filter((p: any) => p.id !== projId);
       localStorage.setItem('nova_recent_projects', JSON.stringify(filtered));
       
       window.dispatchEvent(new CustomEvent('nova-recent-updated'));
-      setLogs(prev => [...prev, `[SYSTEM] Project deleted successfully from Supabase.`]);
+      setLogs(prev => [...prev, `[SYSTEM] Project deleted successfully.`]);
     } catch (e: any) {
       console.error(e);
       alert(`Error deleting project: ${e.message}`);
+    }
+  };
+
+    const syncToSupabase = async (projId: string) => {
+    if (!window.confirm("Sync this project to Supabase Cloud?")) return;
+    try {
+      setLogs(prev => [...prev, `[SYSTEM] Syncing project ${projId} to Supabase...`]);
+      const savedFiles = await LocalDB.get<Record<string, string>>(STORE_FILES, projId);
+      if (!savedFiles) throw new Error("Local project files not found.");
+      
+      const recent = JSON.parse(localStorage.getItem('nova_recent_projects') || '[]');
+      const meta = recent.find((p: any) => p.id === projId);
+      if (!meta) throw new Error("Local project metadata not found.");
+
+      const { data: sessionData } = await supabase.auth.getSession();
+      const user = sessionData?.session?.user;
+      if (!user) throw new Error("You must be logged in to sync projects.");
+
+      const { error: projError } = await supabase.from('projects').upsert({
+        id: projId,
+        user_id: user.id,
+        name: meta.name,
+        app_mode: meta.mode,
+        source: 'supabase',
+        updated_at: new Date().toISOString()
+      }, { onConflict: 'id' });
+      if (projError) throw projError;
+
+      await supabase.from('project_files').delete().eq('project_id', projId);
+      const fileInserts = Object.entries(savedFiles).map(([file_path, content]) => ({
+        project_id: projId,
+        file_path,
+        content
+      }));
+      if (fileInserts.length > 0) {
+        const { error: filesError } = await supabase.from('project_files').insert(fileInserts);
+        if (filesError) throw filesError;
+      }
+
+      meta.source = 'supabase';
+      localStorage.setItem('nova_recent_projects', JSON.stringify(recent));
+      window.dispatchEvent(new CustomEvent('nova-recent-updated'));
+      setLogs(prev => [...prev, `[SYSTEM] Project successfully synced to Supabase.`]);
+      alert("Project successfully synced to Supabase!");
+    } catch(e: any) {
+      console.error(e);
+      if (e.code === '42P01') {
+         alert("Supabase project tables are not set up yet. Run the project storage SQL in Supabase.");
+      } else {
+         alert(`Sync failed: ${e.message}`);
+      }
     }
   };
 
@@ -776,6 +875,7 @@ export function BuilderLayout({ userEmail }: { userEmail?: string }) {
                     </div>
                     <Play className="w-4 h-4 text-indigo-400" />
                   </button>
+                  {p.source !== 'supabase' && <button onClick={() => syncToSupabase(p.id)} className="p-3 bg-slate-900 border border-slate-800 text-slate-500 hover:text-indigo-400 hover:bg-slate-800 rounded-lg transition-colors" title="Sync to Supabase"><DownloadCloud className="w-4 h-4" /></button>}
                   <button onClick={() => deleteProject(p.id)} className="p-3 bg-slate-900 border border-slate-800 text-slate-500 hover:text-rose-400 hover:bg-slate-800 rounded-lg transition-colors" title="Delete Project">
                     <Trash2 className="w-4 h-4" />
                   </button>
