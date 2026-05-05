@@ -155,7 +155,21 @@ export function BuilderLayout({ userEmail }: { userEmail?: string }) {
 
   const handleSave = async (targetFiles = files, targetName?: string, targetMode?: string) => {
     const mem = ProjectMemory.getMemory();
-    const projectId = mem.project_id;
+    let projectId = mem.project_id;
+    
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+    if (!uuidRegex.test(projectId)) {
+      const newId = crypto.randomUUID();
+      setLogs(prev => [...prev, `[SYSTEM] Legacy project ID converted to Supabase-compatible UUID.`]);
+      
+      const recent = JSON.parse(localStorage.getItem('nova_recent_projects') || '[]');
+      const filtered = recent.filter((p: any) => p.id !== projectId);
+      localStorage.setItem('nova_recent_projects', JSON.stringify(filtered));
+      
+      projectId = newId;
+      mem.project_id = newId;
+      ProjectMemory.saveMemory(mem);
+    }
     const projectName = targetName || (mem as any).project_name || 'Untitled Project';
     const finalMode = targetMode || mem.project_mode || appMode;
 

@@ -46,7 +46,7 @@ export class ProjectMemory {
     
     // Fallback if not initialized yet
     return {
-      project_id: 'default',
+      project_id: crypto.randomUUID(),
       project_name: 'New Project',
       project_mode: 'Auto Detect',
       framework: 'Unknown',
@@ -58,7 +58,7 @@ export class ProjectMemory {
 
   static clearMemory(): ProjectMemoryState {
     const cleanState: ProjectMemoryState = {
-      project_id: 'proj_' + Math.random().toString(36).substring(2, 11) + Date.now().toString(36),
+      project_id: crypto.randomUUID(),
       project_name: 'New Project',
       project_mode: 'Auto Detect',
       framework: 'Unknown',
