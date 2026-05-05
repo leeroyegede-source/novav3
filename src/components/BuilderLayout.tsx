@@ -24,7 +24,7 @@ import { PreviewPanel } from '@/components/preview/PreviewPanel';
 import { AppModeSelector } from '@/components/AppModeSelector';
 import { LogsPanel } from '@/components/preview/LogsPanel';
 import { RuntimeIndicator } from '@/components/preview/RuntimeIndicator';
-import { Upload, FolderUp, Rocket, Loader2, DownloadCloud, Trash2, StopCircle, GitBranch, Plus, Save, Clock, MessageSquare, Folder, Code, Terminal, Play, MoreHorizontal } from 'lucide-react';
+import { Upload, FolderUp, Rocket, Loader2, DownloadCloud, Trash2, StopCircle, GitBranch, Plus, Save, Clock, MessageSquare, Folder, Code, Terminal, Play, MoreHorizontal, Settings2 } from 'lucide-react';
 
 export function BuilderLayout({ userEmail }: { userEmail?: string }) {
   const [appMode, setAppMode] = useState("Auto Detect");
@@ -43,7 +43,7 @@ export function BuilderLayout({ userEmail }: { userEmail?: string }) {
   const deployIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
   const [errorCount, setErrorCount] = useState(0);
-  const [mobileTab, setMobileTab] = useState<'chat' | 'files' | 'editor' | 'preview' | 'terminal'>('chat');
+  const [mobileTab, setMobileTab] = useState<'chat' | 'files' | 'editor' | 'tools' | 'preview' | 'terminal'>('chat');
 
   useEffect(() => {
     // Storage initialization is handled by initStorage below.
@@ -540,7 +540,7 @@ export function BuilderLayout({ userEmail }: { userEmail?: string }) {
             />
           </div>
       
-      <div className={`absolute inset-0 md:relative flex-1 flex-col z-10 bg-slate-950 min-h-0 min-w-0 ${mobileTab === 'files' || mobileTab === 'editor' || mobileTab === 'terminal' ? 'flex' : 'hidden md:flex'}`}>
+      <div className={`absolute inset-0 md:relative flex-1 flex-col z-10 bg-slate-950 min-h-0 min-w-0 ${mobileTab === 'files' || mobileTab === 'editor' || mobileTab === 'tools' || mobileTab === 'terminal' ? 'flex' : 'hidden md:flex'}`}>
         <div className="flex-1 flex flex-col md:flex-row min-h-0 min-w-0 w-full">
           <div className={`absolute inset-0 md:relative w-full md:w-[320px] lg:w-[420px] border-r border-slate-800 bg-slate-950 flex-col z-20 shrink-0 min-h-0 min-w-0 max-w-full ${mobileTab === 'files' ? 'flex' : 'hidden md:flex'}`}>
             <div className="p-2 border-b border-slate-800 flex flex-wrap gap-2 md:gap-3 items-center min-w-0">
@@ -597,7 +597,7 @@ export function BuilderLayout({ userEmail }: { userEmail?: string }) {
             </div>
             <FileExplorer files={files} activeFile={activeFile} setActiveFile={setActiveFile} />
           </div>
-          <div className={`absolute inset-0 md:relative flex-1 bg-slate-950 flex-col z-10 min-h-0 min-w-0 ${mobileTab === 'editor' ? 'flex' : 'hidden md:flex'}`}>
+          <div className={`absolute inset-0 md:relative flex-1 bg-slate-950 flex-col z-10 min-h-0 min-w-0 ${mobileTab === 'editor' || mobileTab === 'tools' ? 'flex' : 'hidden md:flex'}`}>
             {viewMode === 'canvas' ? (
                <ArchitectureCanvas triggerGeneration={(prompt) => executeAgentPrompt(prompt, files, true)} files={files} />
             ) : viewMode === 'versions' ? (
@@ -744,9 +744,13 @@ export function BuilderLayout({ userEmail }: { userEmail?: string }) {
           <Folder className="w-5 h-5" />
           <span className="text-[10px] font-medium">Files</span>
         </button>
-        <button onClick={() => setMobileTab('editor')} className={`flex-1 flex flex-col items-center justify-center gap-1 ${mobileTab === 'editor' ? 'text-indigo-400' : 'text-slate-500 hover:text-slate-300'}`}>
+        <button onClick={() => { setMobileTab('editor'); setViewMode('code'); }} className={`flex-1 flex flex-col items-center justify-center gap-1 ${mobileTab === 'editor' ? 'text-indigo-400' : 'text-slate-500 hover:text-slate-300'}`}>
           <Code className="w-5 h-5" />
           <span className="text-[10px] font-medium">Code</span>
+        </button>
+        <button onClick={() => { setMobileTab('tools'); setViewMode('tools'); }} className={`flex-1 flex flex-col items-center justify-center gap-1 ${mobileTab === 'tools' ? 'text-indigo-400' : 'text-slate-500 hover:text-slate-300'}`}>
+          <Settings2 className="w-5 h-5" />
+          <span className="text-[10px] font-medium">Tools</span>
         </button>
         <button onClick={() => setMobileTab('preview')} className={`flex-1 flex flex-col items-center justify-center gap-1 ${mobileTab === 'preview' ? 'text-indigo-400' : 'text-slate-500 hover:text-slate-300'}`}>
           <Play className="w-5 h-5" />

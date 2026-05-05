@@ -52,7 +52,7 @@ export function BuilderTopBar({ onToggleRight, onToggleBottom, onOpenVersions, a
   const isFailed = isHydrated && memory ? !!memory.last_failed_version_id : false;
 
   return (
-    <div className="h-12 w-full min-w-0 max-w-full border-b border-slate-800 bg-slate-900/80 flex items-center justify-between px-2 md:px-4 select-none shrink-0 z-50 overflow-hidden">
+    <div className="h-12 w-full min-w-0 max-w-full border-b border-slate-800 bg-slate-900/80 flex items-center justify-between px-2 md:px-4 select-none shrink-0 z-[100] relative">
       <div className="flex items-center gap-2 md:gap-4 min-w-0">
         <div className="flex items-center gap-2 shrink-0">
           <div className="w-6 h-6 rounded bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center shadow-lg shadow-indigo-500/20">
@@ -209,6 +209,31 @@ export function BuilderTopBar({ onToggleRight, onToggleBottom, onOpenVersions, a
           )}
         </div>
       </div>
+      
+      {/* Mobile Recent Drawer */}
+      {recentOpen && (
+        <div className="fixed inset-0 z-[200] bg-slate-950/80 backdrop-blur-sm md:hidden flex flex-col justify-end">
+          <div className="bg-slate-900 border-t border-slate-800 rounded-t-xl max-h-[80vh] flex flex-col overflow-hidden shadow-[0_-10px_40px_rgba(0,0,0,0.5)]">
+            <div className="p-4 border-b border-slate-800 flex items-center justify-between bg-slate-950">
+               <span className="text-sm font-bold text-slate-300 flex items-center gap-2"><History className="w-4 h-4" /> Recent Projects</span>
+               <button onClick={() => setRecentOpen(false)} className="text-slate-500 hover:text-slate-300 p-1">Close</button>
+            </div>
+            <div className="overflow-y-auto p-2">
+               {recentProjects.length > 0 ? recentProjects.map((p, i) => (
+                 <button key={i} onClick={() => handleLoadProject(p.id)} className="w-full text-left p-3 rounded-lg hover:bg-slate-800 transition-colors flex flex-col gap-1 mb-2 border border-slate-800/50">
+                   <span className="text-sm font-bold text-slate-200">{p.name}</span>
+                   <div className="flex items-center justify-between mt-1">
+                     <span className="text-[10px] text-slate-400 bg-slate-950 px-2 py-0.5 rounded">{p.mode}</span>
+                     <span className="text-[10px] text-indigo-400">Saved locally</span>
+                   </div>
+                 </button>
+               )) : (
+                 <div className="p-6 text-center text-xs text-slate-500">No recent projects yet.</div>
+               )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
