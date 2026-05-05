@@ -57,7 +57,7 @@ export function ToolRegistryPanel({ files, appMode, onInject, onLog }: ToolRegis
   });
 
   return (
-    <div className="flex-1 flex flex-col h-full bg-slate-950 border-r border-slate-800 text-slate-300">
+    <div className="flex-1 flex flex-col h-full min-h-0 overflow-hidden bg-slate-950 border-r border-slate-800 text-slate-300">
       <div className="p-3 border-b border-slate-800 bg-slate-900 flex flex-col gap-3">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
@@ -97,7 +97,7 @@ export function ToolRegistryPanel({ files, appMode, onInject, onLog }: ToolRegis
         </div>
       </div>
       
-      <div className="flex-1 overflow-y-auto p-2">
+      <div className="flex-1 overflow-y-auto min-h-0 max-h-[calc(100vh-160px)] p-2 pr-3">
         {error && (
           <div className="mb-3 bg-rose-500/10 border border-rose-500/30 text-rose-400 text-xs p-2 rounded flex items-center gap-2">
             <AlertTriangle className="w-4 h-4 shrink-0" />
