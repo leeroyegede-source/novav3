@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { ProjectMemory } from '@/lib/memory/projectMemory';
 import { VersionManager } from '@/lib/memory/versionManager';
-import { Save, Play, CheckCircle2, AlertTriangle, Cloud, RotateCcw, LayoutPanelLeft, PanelBottom, Settings2, History, GitBranch, FastForward, MoreHorizontal } from 'lucide-react';
+import { Save, Play, CheckCircle2, AlertTriangle, Cloud, RotateCcw, LayoutPanelLeft, PanelBottom, Settings2, History, GitBranch, FastForward, MoreHorizontal, Trash2 } from 'lucide-react';
 
 interface BuilderTopBarProps {
   onToggleRight: () => void;
@@ -11,9 +11,11 @@ interface BuilderTopBarProps {
   setAppMode: (mode: string) => void;
   userEmail?: string;
   onLoadProject: (projId: string) => void;
+  onDeleteProject: (projId: string) => void;
+  onClearRecent: () => void;
 }
 
-export function BuilderTopBar({ onToggleRight, onToggleBottom, onOpenVersions, appMode, setAppMode, userEmail, onLoadProject }: BuilderTopBarProps) {
+export function BuilderTopBar({ onToggleRight, onToggleBottom, onOpenVersions, appMode, setAppMode, userEmail, onLoadProject, onDeleteProject, onClearRecent }: BuilderTopBarProps) {
   const [isHydrated, setIsHydrated] = useState(false);
   const [memory, setMemory] = useState<any>(null);
   const [recentOpen, setRecentOpen] = useState(false);
@@ -35,10 +37,15 @@ export function BuilderTopBar({ onToggleRight, onToggleBottom, onOpenVersions, a
   }, []);
 
   useEffect(() => {
-    try {
-      const recent = JSON.parse(localStorage.getItem('nova_recent_projects') || '[]');
-      setRecentProjects(recent);
-    } catch (e) {}
+    const fetchRecent = () => {
+      try {
+        const recent = JSON.parse(localStorage.getItem('nova_recent_projects') || '[]');
+        setRecentProjects(recent);
+      } catch (e) {}
+    };
+    fetchRecent();
+    window.addEventListener('nova-recent-updated', fetchRecent);
+    return () => window.removeEventListener('nova-recent-updated', fetchRecent);
   }, [recentOpen]);
 
   const handleLoadProject = (projId: string) => {
@@ -85,18 +92,26 @@ export function BuilderTopBar({ onToggleRight, onToggleBottom, onOpenVersions, a
           
           {recentOpen && (
             <div className="absolute top-full left-0 mt-2 w-64 bg-slate-900 border border-slate-700 rounded-lg shadow-xl z-50 overflow-hidden">
-               <div className="p-2 border-b border-slate-800 bg-slate-950">
+               <div className="p-2 border-b border-slate-800 bg-slate-950 flex items-center justify-between">
                  <span className="text-[10px] font-bold text-slate-500 uppercase">Recent Projects</span>
+                 {recentProjects.length > 0 && (
+                   <button onClick={onClearRecent} className="text-[9px] text-slate-500 hover:text-rose-400 transition-colors">Clear All</button>
+                 )}
                </div>
                <div className="max-h-[300px] overflow-y-auto p-1">
                  {recentProjects.length > 0 ? recentProjects.map((p, i) => (
-                   <button key={i} onClick={() => handleLoadProject(p.id)} className="w-full text-left p-2 rounded hover:bg-slate-800 transition-colors flex flex-col gap-1">
-                     <span className="text-xs font-bold text-slate-200">{p.name}</span>
-                     <div className="flex items-center justify-between">
-                       <span className="text-[9px] text-slate-500">{p.mode}</span>
-                       <span className="text-[9px] text-indigo-400">Saved</span>
-                     </div>
-                   </button>
+                   <div key={i} className="flex items-center gap-1 mb-1">
+                     <button onClick={() => handleLoadProject(p.id)} className="flex-1 text-left p-2 rounded hover:bg-slate-800 transition-colors flex flex-col gap-1">
+                       <span className="text-xs font-bold text-slate-200">{p.name}</span>
+                       <div className="flex items-center justify-between">
+                         <span className="text-[9px] text-slate-500">{p.mode}</span>
+                         <span className="text-[9px] text-indigo-400">Saved</span>
+                       </div>
+                     </button>
+                     <button onClick={() => onDeleteProject(p.id)} className="p-2 text-slate-600 hover:text-rose-400 hover:bg-slate-800 rounded transition-colors" title="Delete Project">
+                       <Trash2 className="w-3.5 h-3.5" />
+                     </button>
+                   </div>
                  )) : (
                    <div className="p-4 text-center text-[10px] text-slate-500">No recent projects yet.</div>
                  )}
@@ -214,17 +229,27 @@ export function BuilderTopBar({ onToggleRight, onToggleBottom, onOpenVersions, a
           <div className="bg-slate-900 border-t border-slate-800 rounded-t-xl max-h-[80vh] flex flex-col overflow-hidden shadow-[0_-10px_40px_rgba(0,0,0,0.5)]">
             <div className="p-4 border-b border-slate-800 flex items-center justify-between bg-slate-950">
                <span className="text-sm font-bold text-slate-300 flex items-center gap-2"><History className="w-4 h-4" /> Recent Projects</span>
-               <button onClick={() => setRecentOpen(false)} className="text-slate-500 hover:text-slate-300 p-1">Close</button>
+               <div className="flex items-center gap-4">
+                 {recentProjects.length > 0 && (
+                   <button onClick={onClearRecent} className="text-xs text-slate-500 hover:text-rose-400 transition-colors">Clear All</button>
+                 )}
+                 <button onClick={() => setRecentOpen(false)} className="text-slate-500 hover:text-slate-300 p-1">Close</button>
+               </div>
             </div>
             <div className="overflow-y-auto p-2">
                {recentProjects.length > 0 ? recentProjects.map((p, i) => (
-                 <button key={i} onClick={() => handleLoadProject(p.id)} className="w-full text-left p-3 rounded-lg hover:bg-slate-800 transition-colors flex flex-col gap-1 mb-2 border border-slate-800/50">
-                   <span className="text-sm font-bold text-slate-200">{p.name}</span>
-                   <div className="flex items-center justify-between mt-1">
-                     <span className="text-[10px] text-slate-400 bg-slate-950 px-2 py-0.5 rounded">{p.mode}</span>
-                     <span className="text-[10px] text-indigo-400">Saved locally</span>
-                   </div>
-                 </button>
+                 <div key={i} className="flex items-center gap-2 mb-2">
+                   <button onClick={() => handleLoadProject(p.id)} className="flex-1 text-left p-3 rounded-lg hover:bg-slate-800 transition-colors flex flex-col gap-1 border border-slate-800/50">
+                     <span className="text-sm font-bold text-slate-200">{p.name}</span>
+                     <div className="flex items-center justify-between mt-1">
+                       <span className="text-[10px] text-slate-400 bg-slate-950 px-2 py-0.5 rounded">{p.mode}</span>
+                       <span className="text-[10px] text-indigo-400">Saved locally</span>
+                     </div>
+                   </button>
+                   <button onClick={() => onDeleteProject(p.id)} className="p-3 bg-slate-900 border border-slate-800/50 text-slate-500 hover:text-rose-400 hover:bg-slate-800 rounded-lg transition-colors" title="Delete Project">
+                     <Trash2 className="w-4 h-4" />
+                   </button>
+                 </div>
                )) : (
                  <div className="p-6 text-center text-xs text-slate-500">No recent projects yet.</div>
                )}

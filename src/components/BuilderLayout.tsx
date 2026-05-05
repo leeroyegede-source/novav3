@@ -197,6 +197,36 @@ export function BuilderLayout({ userEmail }: { userEmail?: string }) {
     }
   };
 
+  const deleteProject = async (projId: string) => {
+    if (!window.confirm("Are you sure you want to delete this project?")) return;
+    try {
+      const mem = ProjectMemory.getMemory();
+      if (mem.project_id === projId) {
+        alert("You cannot delete the currently open project. Please start a new project first.");
+        return;
+      }
+      
+      await LocalDB.remove(STORE_FILES, projId);
+      
+      const recent = JSON.parse(localStorage.getItem('nova_recent_projects') || '[]');
+      const filtered = recent.filter((p: any) => p.id !== projId);
+      localStorage.setItem('nova_recent_projects', JSON.stringify(filtered));
+      
+      window.dispatchEvent(new CustomEvent('nova-recent-updated'));
+      setLogs(prev => [...prev, `[SYSTEM] Project deleted successfully.`]);
+    } catch (e) {
+      console.error(e);
+      alert("Error deleting project.");
+    }
+  };
+
+  const clearRecent = () => {
+    if (!window.confirm("Clear all recent projects? (This only clears the list, files in storage will remain intact unless deleted individually)")) return;
+    localStorage.setItem('nova_recent_projects', JSON.stringify([]));
+    window.dispatchEvent(new CustomEvent('nova-recent-updated'));
+    setLogs(prev => [...prev, `[SYSTEM] Recent projects list cleared.`]);
+  };
+
   const handleNewProject = () => {
     const choice = prompt("You have unsaved changes. Save before starting a new project?\nType '1' to Save and Continue\nType '2' to Continue Without Saving\nType '3' to Cancel", "1");
     if (choice === '3' || choice === null) return;
@@ -574,6 +604,8 @@ export function BuilderLayout({ userEmail }: { userEmail?: string }) {
         setAppMode={handleModeChange}
         userEmail={userEmail}
         onLoadProject={loadProject}
+        onDeleteProject={deleteProject}
+        onClearRecent={clearRecent}
       />
       
       <div className="flex flex-1 overflow-hidden relative min-h-0 min-w-0 w-full">
