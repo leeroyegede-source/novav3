@@ -18,6 +18,7 @@ import { ErrorDetector } from '@/lib/agents/errorDetector';
 import { VersionManager } from '@/lib/memory/versionManager';
 import { ProjectMemory } from '@/lib/memory/projectMemory';
 import { LocalDB, STORE_FILES } from '@/lib/storage/indexedDB';
+import { supabase } from '@/lib/supabaseClient';
 import JSZip from 'jszip';
 import { saveAs } from 'file-saver';
 import { PreviewPanel } from '@/components/preview/PreviewPanel';
@@ -152,23 +153,54 @@ export function BuilderLayout({ userEmail }: { userEmail?: string }) {
     }
   };
 
-  const handleSave = (targetFiles = files, targetName?: string, targetMode?: string) => {
-    VersionManager.saveSnapshot(targetFiles, 'Manual Save');
-    
+  const handleSave = async (targetFiles = files, targetName?: string, targetMode?: string) => {
     const mem = ProjectMemory.getMemory();
     const projectId = mem.project_id;
     const projectName = targetName || (mem as any).project_name || 'Untitled Project';
     const finalMode = targetMode || mem.project_mode || appMode;
 
-    LocalDB.set(STORE_FILES, projectId, targetFiles).catch(console.error);
-    
-    localStorage.setItem('nova_appMode', finalMode);
-    localStorage.setItem('nova_files', JSON.stringify(targetFiles));
-    LocalDB.set(STORE_FILES, 'nova_active_files', targetFiles).catch(console.error);
-    
-    setLogs(prev => [...prev, '[SYSTEM] Project saved manually to IndexedDB.']);
-    
+    const { data: sessionData } = await supabase.auth.getSession();
+    const user = sessionData?.session?.user;
+    if (!user) {
+      alert("You must be logged in to save projects to the cloud.");
+      return;
+    }
+
+    setLogs(prev => [...prev, '[SYSTEM] Saving to Supabase cloud...']);
+
     try {
+      const { error: projError } = await supabase.from('projects').upsert({
+        id: projectId,
+        user_id: user.id,
+        name: projectName,
+        app_mode: finalMode,
+        source: 'Saved via Builder',
+        updated_at: new Date().toISOString()
+      }, { onConflict: 'id' });
+      
+      if (projError) throw projError;
+
+      await supabase.from('project_files').delete().eq('project_id', projectId);
+      
+      const fileInserts = Object.entries(targetFiles).map(([file_path, content]) => ({
+        project_id: projectId,
+        file_path,
+        content
+      }));
+      
+      if (fileInserts.length > 0) {
+        const { error: filesError } = await supabase.from('project_files').insert(fileInserts);
+        if (filesError) throw filesError;
+      }
+
+      await supabase.from('project_memory').upsert({
+        project_id: projectId,
+        memory_summary: mem.memory_summary || '',
+        updated_at: new Date().toISOString()
+      }, { onConflict: 'project_id' });
+
+      VersionManager.saveSnapshot(targetFiles, 'Manual Save');
+
       const recent = JSON.parse(localStorage.getItem('nova_recent_projects') || '[]');
       const existingIdx = recent.findIndex((p: any) => p.id === projectId);
       const newProject = {
@@ -176,60 +208,79 @@ export function BuilderLayout({ userEmail }: { userEmail?: string }) {
         name: projectName,
         mode: finalMode,
         time: Date.now(),
-        source: 'Saved Locally'
+        source: 'Supabase Cloud'
       };
       if (existingIdx >= 0) recent[existingIdx] = newProject;
       else recent.unshift(newProject);
       localStorage.setItem('nova_recent_projects', JSON.stringify(recent));
+      
+      localStorage.setItem('nova_appMode', finalMode);
+      
       window.dispatchEvent(new CustomEvent('nova-recent-updated'));
-      if (!targetName) alert('Project saved successfully!');
-    } catch (err) {
-      setLogs(prev => [...prev, '[ERROR] Failed to save project metadata.']);
+      setLogs(prev => [...prev, '[SYSTEM] Project saved successfully to Supabase!']);
+      if (!targetName) alert('Project saved successfully to Cloud!');
+    } catch (err: any) {
+      console.error(err);
+      setLogs(prev => [...prev, `[ERROR] Supabase Save Failed: ${err.message}`]);
+      alert(`Supabase Save Failed: ${err.message}`);
     }
   };
 
   const loadProject = async (projId: string) => {
     try {
-      setLogs(prev => [...prev, `[SYSTEM] Loading project ${projId} from IndexedDB...`]);
-      const savedFiles = await LocalDB.get<Record<string, string>>(STORE_FILES, projId);
+      setLogs(prev => [...prev, `[SYSTEM] Loading project ${projId} from Supabase...`]);
       
-      if (savedFiles) {
+      const { data: filesData, error } = await supabase
+        .from('project_files')
+        .select('file_path, content')
+        .eq('project_id', projId);
+
+      if (error) throw error;
+      
+      if (filesData && filesData.length > 0) {
+        const savedFiles: Record<string, string> = {};
+        filesData.forEach(f => {
+          savedFiles[f.file_path] = f.content;
+        });
+        
         setFiles(savedFiles);
         
-        // Find metadata from recent projects list
         const recentStr = localStorage.getItem('nova_recent_projects');
         if (recentStr) {
           const recent = JSON.parse(recentStr);
           const meta = recent.find((p: any) => p.id === projId);
           if (meta) {
              setAppMode(meta.mode);
-             // Restore ProjectMemory project_id
              const mem = ProjectMemory.getMemory();
              mem.project_id = projId;
              (mem as any).project_name = meta.name;
              mem.project_mode = meta.mode;
-             ProjectMemory.saveMemory(mem);
+             
+             // Fetch project memory
+             supabase.from('project_memory').select('memory_summary').eq('project_id', projId).single().then(({ data }) => {
+                if (data && data.memory_summary) {
+                   mem.memory_summary = data.memory_summary;
+                }
+                ProjectMemory.saveMemory(mem);
+             });
+
           }
         }
         
-        // Ensure active workspace reflects this newly loaded project
-        await LocalDB.set(STORE_FILES, 'nova_active_files', savedFiles);
-        localStorage.setItem('nova_files', JSON.stringify(savedFiles));
-        
         await VersionManager.loadProject(projId);
         setShowStartScreen(false);
-        setLogs(prev => [...prev, `[SYSTEM] Project loaded successfully.`]);
+        setLogs(prev => [...prev, `[SYSTEM] Project loaded successfully from Supabase.`]);
       } else {
-        alert("Project files not found in local storage.");
+        alert("Project files not found in Supabase.");
       }
-    } catch (e) {
+    } catch (e: any) {
       console.error(e);
-      alert("Error loading project.");
+      alert(`Error loading project from Supabase: ${e.message}`);
     }
   };
 
   const deleteProject = async (projId: string) => {
-    if (!window.confirm("Are you sure you want to delete this project?")) return;
+    if (!window.confirm("Are you sure you want to delete this project from the cloud?")) return;
     try {
       const mem = ProjectMemory.getMemory();
       if (mem.project_id === projId) {
@@ -237,17 +288,18 @@ export function BuilderLayout({ userEmail }: { userEmail?: string }) {
         return;
       }
       
-      await LocalDB.remove(STORE_FILES, projId);
+      const { error } = await supabase.from('projects').delete().eq('id', projId);
+      if (error) throw error;
       
       const recent = JSON.parse(localStorage.getItem('nova_recent_projects') || '[]');
       const filtered = recent.filter((p: any) => p.id !== projId);
       localStorage.setItem('nova_recent_projects', JSON.stringify(filtered));
       
       window.dispatchEvent(new CustomEvent('nova-recent-updated'));
-      setLogs(prev => [...prev, `[SYSTEM] Project deleted successfully.`]);
-    } catch (e) {
+      setLogs(prev => [...prev, `[SYSTEM] Project deleted successfully from Supabase.`]);
+    } catch (e: any) {
       console.error(e);
-      alert("Error deleting project.");
+      alert(`Error deleting project: ${e.message}`);
     }
   };
 
@@ -274,8 +326,8 @@ export function BuilderLayout({ userEmail }: { userEmail?: string }) {
       return;
     }
     
-    localStorage.removeItem('nova_files');
-    await LocalDB.remove(STORE_FILES, 'nova_active_files');
+    
+    
     
     const mem = ProjectMemory.clearMemory();
     mem.project_name = newProjectName.trim();
@@ -309,26 +361,13 @@ export function BuilderLayout({ userEmail }: { userEmail?: string }) {
       await ProjectMemory.init();
       
       let loadedFiles = null;
-      try {
-        loadedFiles = await LocalDB.get<Record<string, string>>(STORE_FILES, 'nova_active_files');
-      } catch (err) {
-        console.error("LocalDB Error:", err);
-      }
       
       const savedMode = localStorage.getItem('nova_appMode');
-      const savedFilesStr = localStorage.getItem('nova_files');
+      const savedFilesStr = null;
       
       if (savedMode) setAppMode(savedMode);
       
-      if (loadedFiles) {
-        setFiles(loadedFiles);
-      } else if (savedFilesStr) {
-        try { 
-          const f = JSON.parse(savedFilesStr); 
-          setFiles(f); 
-          await LocalDB.set(STORE_FILES, 'nova_active_files', f);
-        } catch (e) {}
-      }
+      
       setIsHydrated(true);
     };
     initStorage();
@@ -337,8 +376,8 @@ export function BuilderLayout({ userEmail }: { userEmail?: string }) {
   useEffect(() => {
     if (isHydrated) {
       localStorage.setItem('nova_appMode', appMode);
-      localStorage.setItem('nova_files', JSON.stringify(files));
-      LocalDB.set(STORE_FILES, 'nova_active_files', files).catch(console.error);
+      
+      
     }
   }, [appMode, files, isHydrated]);
 
@@ -572,8 +611,8 @@ export function BuilderLayout({ userEmail }: { userEmail?: string }) {
     
     VersionManager.clearHistory();
     ProjectMemory.clearMemory();
-    await LocalDB.remove(STORE_FILES, 'nova_active_files');
-    localStorage.removeItem('nova_files');
+    
+    
   };
 
   const handleZipUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {

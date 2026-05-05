@@ -1,5 +1,5 @@
 import { ProjectMemory } from './projectMemory';
-import { LocalDB, STORE_VERSIONS } from '../storage/indexedDB';
+import { supabase } from '../supabaseClient';
 
 export interface ProjectSnapshot {
   id: string;
@@ -13,46 +13,56 @@ export class VersionManager {
   private static history: ProjectSnapshot[] = [];
   private static initialized = false;
 
-  private static getStorageKey(): string {
+  private static getProjectId(): string {
     const mem = ProjectMemory.getMemory();
-    return mem.project_id ? `nova_versions_${mem.project_id}` : 'nova_versions';
+    return mem.project_id || 'default';
   }
 
   static async init() {
-    const key = this.getStorageKey();
+    const projectId = this.getProjectId();
     if (typeof window !== 'undefined') {
       try {
-        const idbData = await LocalDB.get<ProjectSnapshot[]>(STORE_VERSIONS, key);
-        if (idbData) {
-          this.history = idbData;
+        const { data, error } = await supabase.from('project_versions')
+          .select('*')
+          .eq('project_id', projectId)
+          .order('created_at', { ascending: true });
+          
+        if (data && !error) {
+          this.history = data.map(row => ({
+            id: row.id,
+            timestamp: new Date(row.created_at).getTime(),
+            files: row.snapshot.files,
+            message: row.version_name,
+            previewState: row.snapshot.previewState
+          }));
         } else {
-          // Backward compatibility check for old global key
-          const oldData = localStorage.getItem('nova_versions');
-          if (oldData && key === 'nova_versions_default') {
-             this.history = JSON.parse(oldData);
-             await LocalDB.set(STORE_VERSIONS, key, this.history);
-          } else {
-             const lsData = localStorage.getItem(key);
-             if (lsData) {
-               this.history = JSON.parse(lsData);
-               await LocalDB.set(STORE_VERSIONS, key, this.history);
-             } else {
-               this.history = [];
-             }
-          }
+           this.history = [];
         }
       } catch (e) {
-        console.error("Failed to init VersionManager from IDB:", e);
+        console.error("Failed to init VersionManager from Supabase:", e);
       }
       this.initialized = true;
     }
   }
 
   static async loadProject(projectId: string) {
-    const key = `nova_versions_${projectId}`;
     if (typeof window !== 'undefined') {
-      const idbData = await LocalDB.get<ProjectSnapshot[]>(STORE_VERSIONS, key);
-      this.history = idbData || [];
+      const { data } = await supabase.from('project_versions')
+          .select('*')
+          .eq('project_id', projectId)
+          .order('created_at', { ascending: true });
+          
+      if (data) {
+        this.history = data.map(row => ({
+          id: row.id,
+          timestamp: new Date(row.created_at).getTime(),
+          files: row.snapshot.files,
+          message: row.version_name,
+          previewState: row.snapshot.previewState
+        }));
+      } else {
+        this.history = [];
+      }
       this.initialized = true;
     }
   }
@@ -71,10 +81,16 @@ export class VersionManager {
     };
     
     this.history.push(snapshot);
-    const key = this.getStorageKey();
+    const projectId = this.getProjectId();
+    
     if (typeof window !== 'undefined') {
-      localStorage.setItem(key, JSON.stringify(this.history));
-      LocalDB.set(STORE_VERSIONS, key, this.history).catch(console.error);
+      supabase.from('project_versions').insert({
+        id: snapshot.id,
+        project_id: projectId,
+        version_name: message,
+        snapshot: { files, previewState },
+        created_at: new Date(snapshot.timestamp).toISOString()
+      }).then(({error}) => { if (error) console.error(error); });
     }
     
     if (previewState === 'passed') {
@@ -90,10 +106,11 @@ export class VersionManager {
     const target = this.history.find(s => s.id === id);
     if (target) {
       target.previewState = state;
-      const key = this.getStorageKey();
+      const projectId = this.getProjectId();
       if (typeof window !== 'undefined') {
-        localStorage.setItem(key, JSON.stringify(this.history));
-        LocalDB.set(STORE_VERSIONS, key, this.history).catch(console.error);
+         supabase.from('project_versions').update({
+           snapshot: { files: target.files, previewState: state }
+         }).eq('id', id).then(({error}) => { if (error) console.error(error); });
       }
       
       if (state === 'passed') {
@@ -106,10 +123,5 @@ export class VersionManager {
 
   static clearHistory() {
     this.history = [];
-    const key = this.getStorageKey();
-    if (typeof window !== 'undefined') {
-      localStorage.removeItem(key);
-      LocalDB.remove(STORE_VERSIONS, key).catch(console.error);
-    }
   }
 }

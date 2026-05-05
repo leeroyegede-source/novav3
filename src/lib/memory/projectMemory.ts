@@ -1,4 +1,4 @@
-import { LocalDB, STORE_MEMORY } from '../storage/indexedDB';
+import { supabase } from '../supabaseClient';
 
 export interface MemoryItem {
   id: string;
@@ -23,29 +23,12 @@ export interface ProjectMemoryState {
 }
 
 export class ProjectMemory {
-  private static STORAGE_KEY = 'nova_project_memory';
   private static state: ProjectMemoryState | null = null;
   private static initialized = false;
 
   static async init() {
     if (this.initialized) return;
-    if (typeof window !== 'undefined') {
-      try {
-        const idbData = await LocalDB.get<ProjectMemoryState>(STORE_MEMORY, this.STORAGE_KEY);
-        if (idbData) {
-          this.state = idbData;
-        } else {
-          const lsData = localStorage.getItem(this.STORAGE_KEY);
-          if (lsData) {
-            this.state = JSON.parse(lsData);
-            await LocalDB.set(STORE_MEMORY, this.STORAGE_KEY, this.state);
-          }
-        }
-      } catch (e) {
-        console.error("Failed to init ProjectMemory from IDB:", e);
-      }
-      this.initialized = true;
-    }
+    this.initialized = true;
   }
 
   static getMemory(): ProjectMemoryState {
@@ -75,22 +58,12 @@ export class ProjectMemory {
     };
     
     this.state = cleanState;
-    if (typeof window !== 'undefined') {
-      localStorage.removeItem(this.STORAGE_KEY);
-      LocalDB.remove(STORE_MEMORY, this.STORAGE_KEY).catch(console.error);
-      this.saveMemory(cleanState);
-    }
-    
     return cleanState;
   }
 
   static saveMemory(state: ProjectMemoryState) {
     state.updated_at = Date.now();
     this.state = state;
-    if (typeof window !== 'undefined') {
-      localStorage.setItem(this.STORAGE_KEY, JSON.stringify(state));
-      LocalDB.set(STORE_MEMORY, this.STORAGE_KEY, state).catch(console.error);
-    }
   }
 
   static addItem(item: Omit<MemoryItem, 'id' | 'created_at'>) {
