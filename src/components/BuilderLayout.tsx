@@ -517,7 +517,7 @@ export function BuilderLayout({ userEmail }: { userEmail?: string }) {
   };
 
   return (
-    <div className="flex flex-col h-screen bg-slate-950 font-sans text-slate-300 overflow-hidden">
+    <div className="flex flex-col h-screen w-screen max-w-full bg-slate-950 font-sans text-slate-300 overflow-hidden">
       <BuilderTopBar 
         onToggleRight={() => {}} 
         onToggleBottom={() => {}} 
@@ -527,10 +527,10 @@ export function BuilderLayout({ userEmail }: { userEmail?: string }) {
         userEmail={userEmail}
       />
       
-      <div className="flex flex-1 overflow-hidden relative">
+      <div className="flex flex-1 overflow-hidden relative min-h-0 min-w-0 w-full">
         
-        <div className="flex-1 flex flex-col md:flex-row overflow-hidden relative pb-16 md:pb-0">
-          <div className={`absolute inset-0 md:relative w-full md:w-[300px] border-r border-slate-800 flex-col z-20 shadow-xl bg-slate-900 shrink-0 ${mobileTab === 'chat' ? 'flex' : 'hidden md:flex'}`}>
+        <div className="flex-1 flex flex-col md:flex-row overflow-hidden relative pb-16 md:pb-0 min-h-0 min-w-0 w-full">
+          <div className={`absolute inset-0 md:relative w-full md:w-[300px] border-r border-slate-800 flex-col z-20 shadow-xl bg-slate-900 shrink-0 min-h-0 min-w-0 max-w-full ${mobileTab === 'chat' ? 'flex' : 'hidden md:flex'}`}>
             <ChatPanel 
               files={files} 
               setFiles={setFiles} 
@@ -540,10 +540,10 @@ export function BuilderLayout({ userEmail }: { userEmail?: string }) {
             />
           </div>
       
-      <div className={`absolute inset-0 md:relative flex-1 flex-col z-10 bg-slate-950 ${mobileTab === 'files' || mobileTab === 'editor' || mobileTab === 'terminal' ? 'flex' : 'hidden md:flex'}`}>
-        <div className="flex-1 flex flex-col md:flex-row">
-          <div className={`absolute inset-0 md:relative w-full md:w-[320px] lg:w-[420px] border-r border-slate-800 bg-slate-950 flex-col z-20 ${mobileTab === 'files' ? 'flex' : 'hidden md:flex'}`}>
-            <div className="p-2 border-b border-slate-800 flex flex-wrap gap-2 md:gap-3 items-center">
+      <div className={`absolute inset-0 md:relative flex-1 flex-col z-10 bg-slate-950 min-h-0 min-w-0 ${mobileTab === 'files' || mobileTab === 'editor' || mobileTab === 'terminal' ? 'flex' : 'hidden md:flex'}`}>
+        <div className="flex-1 flex flex-col md:flex-row min-h-0 min-w-0 w-full">
+          <div className={`absolute inset-0 md:relative w-full md:w-[320px] lg:w-[420px] border-r border-slate-800 bg-slate-950 flex-col z-20 shrink-0 min-h-0 min-w-0 max-w-full ${mobileTab === 'files' ? 'flex' : 'hidden md:flex'}`}>
+            <div className="p-2 border-b border-slate-800 flex flex-wrap gap-2 md:gap-3 items-center min-w-0">
               <span className="text-xs font-bold text-slate-400 uppercase tracking-wider hidden lg:block">EF</span>
               <select 
                 value={viewMode}
@@ -597,7 +597,7 @@ export function BuilderLayout({ userEmail }: { userEmail?: string }) {
             </div>
             <FileExplorer files={files} activeFile={activeFile} setActiveFile={setActiveFile} />
           </div>
-          <div className={`absolute inset-0 md:relative flex-1 bg-slate-950 flex-col z-10 ${mobileTab === 'editor' ? 'flex' : 'hidden md:flex'}`}>
+          <div className={`absolute inset-0 md:relative flex-1 bg-slate-950 flex-col z-10 min-h-0 min-w-0 ${mobileTab === 'editor' ? 'flex' : 'hidden md:flex'}`}>
             {viewMode === 'canvas' ? (
                <ArchitectureCanvas triggerGeneration={(prompt) => executeAgentPrompt(prompt, files, true)} files={files} />
             ) : viewMode === 'versions' ? (
@@ -676,12 +676,12 @@ export function BuilderLayout({ userEmail }: { userEmail?: string }) {
             )}
           </div>
         </div>
-        <div className={`absolute inset-0 md:relative md:h-[250px] border-t border-slate-800 bg-slate-950 flex-col z-30 ${mobileTab === 'terminal' ? 'flex' : 'hidden md:flex'}`}>
+        <div className={`absolute inset-0 md:relative md:h-[250px] border-t border-slate-800 bg-slate-950 flex-col z-30 shrink-0 min-h-0 min-w-0 max-w-full ${mobileTab === 'terminal' ? 'flex' : 'hidden md:flex'}`}>
            <LogsPanel logs={logs} onCommand={handleTerminalCommand} onSelfHeal={handleSelfHeal} />
         </div>
       </div>
       
-      <div className={`absolute inset-0 md:relative w-full md:w-[45%] flex-col border-l border-slate-800 bg-black z-30 shadow-xl ${mobileTab === 'preview' ? 'flex' : 'hidden md:flex'}`}>
+      <div className={`absolute inset-0 md:relative w-full md:w-[45%] flex-col border-l border-slate-800 bg-black z-30 shadow-xl shrink-0 min-h-0 min-w-0 max-w-full ${mobileTab === 'preview' ? 'flex' : 'hidden md:flex'}`}>
         <div className="h-12 border-b border-slate-800 flex items-center px-4 justify-between bg-slate-900 shrink-0 overflow-x-auto whitespace-nowrap">
            <div className="flex items-center gap-2 mr-4">
              <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse shrink-0" />

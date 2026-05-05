@@ -52,15 +52,15 @@ export function BuilderTopBar({ onToggleRight, onToggleBottom, onOpenVersions, a
   const isFailed = isHydrated && memory ? !!memory.last_failed_version_id : false;
 
   return (
-    <div className="h-12 border-b border-slate-800 bg-slate-900/80 flex items-center justify-between px-4 select-none shrink-0 z-50">
-      <div className="flex items-center gap-4">
-        <div className="flex items-center gap-2">
+    <div className="h-12 w-full min-w-0 max-w-full border-b border-slate-800 bg-slate-900/80 flex items-center justify-between px-2 md:px-4 select-none shrink-0 z-50 overflow-hidden">
+      <div className="flex items-center gap-2 md:gap-4 min-w-0">
+        <div className="flex items-center gap-2 shrink-0">
           <div className="w-6 h-6 rounded bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center shadow-lg shadow-indigo-500/20">
             <span className="text-white font-bold text-[10px]">NV</span>
           </div>
-          <div>
-            <h1 className="text-xs font-bold text-slate-200 leading-tight hidden md:block">Nova Workspace</h1>
-            <h1 className="text-xs font-bold text-slate-200 leading-tight md:hidden">NOVA</h1>
+          <div className="min-w-0">
+            <h1 className="text-xs font-bold text-slate-200 leading-tight hidden md:block truncate">Nova Workspace</h1>
+            <h1 className="text-xs font-bold text-slate-200 leading-tight md:hidden truncate">NOVA</h1>
           </div>
         </div>
 
@@ -135,8 +135,8 @@ export function BuilderTopBar({ onToggleRight, onToggleBottom, onOpenVersions, a
         </div>
       </div>
 
-      <div className="flex items-center gap-2">
-        <button onClick={onOpenVersions} className="hidden md:flex text-[10px] font-bold bg-slate-800 hover:bg-slate-700 text-slate-300 px-3 py-1.5 rounded items-center gap-1.5 transition-colors">
+      <div className="flex items-center gap-2 shrink-0 ml-auto pl-2">
+        <button onClick={onOpenVersions} className="hidden md:flex text-[10px] font-bold bg-slate-800 hover:bg-slate-700 text-slate-300 px-3 py-1.5 rounded items-center gap-1.5 transition-colors shrink-0">
           <GitBranch className="w-3 h-3" /> Versions
         </button>
         {timeline.max > 0 && (
