@@ -699,12 +699,13 @@ export function BuilderLayout({ userEmail }: { userEmail?: string }) {
   };
 
   const handleClearFiles = async () => {
-    if (!window.confirm("Are you sure you want to clear the active workspace?")) return;
-    setFiles({ "/App.js": "" });
-    setActiveFile("/App.js");
+    if (!window.confirm("Clear current workspace? This will not delete saved projects.")) return;
+    setFiles({});
+    setActiveFile(null);
     setClearChatTrigger(prev => prev + 1);
-    setLogs(prev => [...prev, `[SYSTEM] Workspace cleared. Clean slate ready for ${appMode}.`]);
+    setLogs(prev => [...prev, `[SYSTEM] Workspace cleared. Saved projects were not deleted.`]);
     ProjectMemory.clearMemory();
+    VersionManager.clearHistory();
   };
 
   const handleZipUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
