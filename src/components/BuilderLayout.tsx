@@ -102,6 +102,18 @@ export function BuilderLayout({ userEmail }: { userEmail?: string }) {
     const repoUrl = prompt("Enter GitHub Repository URL (e.g., https://github.com/user/repo):");
     if (!repoUrl) return;
     
+    let defaultName = "GitHub Repo";
+    try {
+      const urlObj = new URL(repoUrl);
+      const parts = urlObj.pathname.split('/').filter(Boolean);
+      if (parts.length >= 2) {
+        defaultName = parts[1];
+      }
+    } catch(e) {}
+    
+    let projectName = prompt(`Name this imported project (GitHub):`, defaultName);
+    if (!projectName) return;
+    
     setLogs(prev => [...prev, `[IMPORT] Fetching repository from GitHub...`]);
     try {
       const res = await fetch('/api/hub/github', {
@@ -118,8 +130,22 @@ export function BuilderLayout({ userEmail }: { userEmail?: string }) {
       const blob = await res.blob();
       const newFiles = await processZipData(blob);
       
+      const mode = autoDetectAndSetMode(newFiles);
+      
+      const mem = ProjectMemory.clearMemory();
+      mem.project_name = projectName.trim();
+      mem.project_mode = mode;
+      mem.framework = mode;
+      ProjectMemory.saveMemory(mem);
+      
+      VersionManager.clearHistory();
+      
       setFiles(newFiles);
-      autoDetectAndSetMode(newFiles);
+      setActiveFile(Object.keys(newFiles)[0] || null);
+      
+      handleSave(newFiles, projectName.trim(), mode);
+      VersionManager.saveSnapshot(newFiles, 'Imported project initial state');
+      
       setLogs(prev => [...prev, `[SYSTEM] Successfully imported ${Object.keys(newFiles).length} files from GitHub.`]);
     } catch (err: unknown) {
       setLogs(prev => [...prev, `[ERROR] GitHub Import failed: ${(err as Error).message}`]);
@@ -519,16 +545,22 @@ export function BuilderLayout({ userEmail }: { userEmail?: string }) {
   };
 
   const autoDetectAndSetMode = (newFiles: Record<string, string>) => {
-    if (newFiles['/next.config.js'] || newFiles['/next.config.mjs'] || newFiles['/pages/_app.js'] || newFiles['/app/layout.tsx'] || newFiles['/app/layout.js']) {
-       setAppMode("Next.js / SSR");
-       setLogs(prev => [...prev, "[SYSTEM] Auto-detected Next.js environment."]);
-    } else if (newFiles['/package.json'] && newFiles['/package.json'].includes('"react"')) {
-       setAppMode("React / Vite");
-       setLogs(prev => [...prev, "[SYSTEM] Auto-detected React environment."]);
-    } else {
-       setAppMode("Static Website");
-       setLogs(prev => [...prev, "[SYSTEM] Auto-detected Static HTML/VanillaJS environment."]);
+    let mode = "Static Website";
+    if (newFiles['/artisan'] || (newFiles['/composer.json'] && newFiles['/composer.json'].includes('laravel/framework')) || newFiles['/public/index.php']) {
+       mode = "Laravel";
+    } else if (newFiles['/next.config.js'] || newFiles['/next.config.mjs'] || (newFiles['/package.json'] && newFiles['/package.json'].includes('"next"'))) {
+       mode = "Next.js / SSR";
+    } else if (newFiles['/package.json'] && (newFiles['/package.json'].includes('"react"') || newFiles['/package.json'].includes('"vite"')) || newFiles['/index.html']) {
+       mode = "React / Vite";
+    } else if (newFiles['/package.json'] && newFiles['/package.json'].includes('"express"')) {
+       mode = "Node / Express";
+    } else if (newFiles['/index.php']) {
+       mode = "PHP";
     }
+    
+    setAppMode(mode);
+    setLogs(prev => [...prev, `[SYSTEM] Auto-detected ${mode} environment.`]);
+    return mode;
   };
 
   const handleClearFiles = async () => {
@@ -547,11 +579,33 @@ export function BuilderLayout({ userEmail }: { userEmail?: string }) {
   const handleZipUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    
+    let defaultName = file.name.replace(/\.zip$/i, '');
+    let projectName = prompt(`Name this imported project (ZIP):`, defaultName);
+    if (!projectName) {
+      e.target.value = '';
+      return;
+    }
+    
     setLogs(prev => [...prev, "[IMPORT] Reading ZIP archive..."]);
     try {
       const newFiles = await processZipData(file);
+      const mode = autoDetectAndSetMode(newFiles);
+      
+      const mem = ProjectMemory.clearMemory();
+      mem.project_name = projectName.trim();
+      mem.project_mode = mode;
+      mem.framework = mode;
+      ProjectMemory.saveMemory(mem);
+      
+      VersionManager.clearHistory();
+      
       setFiles(newFiles);
-      autoDetectAndSetMode(newFiles);
+      setActiveFile(Object.keys(newFiles)[0] || null);
+      
+      handleSave(newFiles, projectName.trim(), mode);
+      VersionManager.saveSnapshot(newFiles, 'Imported project initial state');
+      
       setLogs(prev => [...prev, `[SYSTEM] Successfully imported ${Object.keys(newFiles).length} files from ZIP.`]);
     } catch (err) {
       setLogs(prev => [...prev, `[ERROR] Failed to parse ZIP: ${(err as Error).message}`]);
@@ -589,6 +643,18 @@ export function BuilderLayout({ userEmail }: { userEmail?: string }) {
   const handleFolderUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const fileList = e.target.files;
     if (!fileList || fileList.length === 0) return;
+    
+    let defaultName = "Imported Folder";
+    if (fileList[0].webkitRelativePath) {
+      defaultName = fileList[0].webkitRelativePath.split('/')[0] || defaultName;
+    }
+    
+    let projectName = prompt(`Name this imported project (Folder):`, defaultName);
+    if (!projectName) {
+      e.target.value = '';
+      return;
+    }
+    
     setLogs(prev => [...prev, "[IMPORT] Mapping local folder structure..."]);
     const newFiles: Record<string, string> = {};
     let count = 0;
@@ -599,7 +665,6 @@ export function BuilderLayout({ userEmail }: { userEmail?: string }) {
         const path = file.webkitRelativePath;
         if (path.includes('node_modules') || path.includes('.git') || path.includes('.next')) continue;
         
-        // Strip the root folder name "my-project/src/App.js" -> "/src/App.js"
         const pathParts = path.split('/');
         pathParts.shift(); 
         const relativePath = '/' + pathParts.join('/');
@@ -610,13 +675,27 @@ export function BuilderLayout({ userEmail }: { userEmail?: string }) {
           count++;
         }
       }
+      
+      const mode = autoDetectAndSetMode(newFiles);
+      
+      const mem = ProjectMemory.clearMemory();
+      mem.project_name = projectName.trim();
+      mem.project_mode = mode;
+      mem.framework = mode;
+      ProjectMemory.saveMemory(mem);
+      
+      VersionManager.clearHistory();
+      
       setFiles(newFiles);
-      autoDetectAndSetMode(newFiles);
-      setLogs(prev => [...prev, `[SYSTEM] Successfully mapped ${count} files into the sandbox.`]);
+      setActiveFile(Object.keys(newFiles)[0] || null);
+      
+      handleSave(newFiles, projectName.trim(), mode);
+      VersionManager.saveSnapshot(newFiles, 'Imported project initial state');
+      
+      setLogs(prev => [...prev, `[SYSTEM] Successfully imported ${count} files from Folder.`]);
     } catch (err) {
       setLogs(prev => [...prev, `[ERROR] Folder import failed: ${(err as Error).message}`]);
     }
-    // Reset input
     e.target.value = '';
   };
 
