@@ -37,6 +37,12 @@ export function DebugPanel() {
     );
   }
 
+  const clearLogs = () => {
+    localStorage.removeItem('nova_debug_logs');
+    setLogs([]);
+    window.dispatchEvent(new Event('nova-debug-updated'));
+  };
+
   return (
     <div className="relative">
       <button 
@@ -53,9 +59,14 @@ export function DebugPanel() {
           <Bug className="w-4 h-4" />
           Developer Debug Logs (Supabase)
         </h2>
-        <button onClick={() => setIsOpen(false)} className="p-1 hover:bg-slate-800 rounded-md transition-colors text-slate-400">
-          <X className="w-4 h-4" />
-        </button>
+        <div className="flex items-center gap-1">
+          <button onClick={clearLogs} className="px-2 py-1 text-xs hover:bg-slate-800 rounded-md transition-colors text-slate-400">
+            Clear
+          </button>
+          <button onClick={() => setIsOpen(false)} className="p-1 hover:bg-slate-800 rounded-md transition-colors text-slate-400">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
       </div>
       
       <div className="p-2 overflow-y-auto flex-1 text-xs font-mono space-y-2">

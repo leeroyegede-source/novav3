@@ -59,7 +59,22 @@ export function BuilderLayout({ userEmail }: { userEmail?: string }) {
     setIsCloudSaving(true);
     setLogs(prev => [...prev, '[SYSTEM] Saving project to cloud...']);
     const mem = ProjectMemory.getMemory();
-    const { success, error } = await CloudSyncManager.saveToCloud(mem.project_id, files, mem.project_name || 'Untitled Project');
+    
+    let currentName = mem.project_name;
+    if (!currentName || currentName === 'New Project') {
+      const promptName = prompt("Name this project before saving to Cloud:", "My Project");
+      if (!promptName) {
+        setIsCloudSaving(false);
+        return;
+      }
+      currentName = promptName.trim();
+      mem.project_name = currentName;
+    }
+    
+    mem.project_mode = mem.project_mode || appMode;
+    ProjectMemory.saveMemory(mem);
+
+    const { success, error } = await CloudSyncManager.saveToCloud(mem.project_id, files, currentName);
     if (success) {
       setLogs(prev => [...prev, '[SYSTEM] Synced to Cloud successfully.']);
     } else {
@@ -189,8 +204,17 @@ export function BuilderLayout({ userEmail }: { userEmail?: string }) {
       mem.project_id = newId;
       ProjectMemory.saveMemory(mem);
     }
-    const projectName = targetName || (mem as any).project_name || 'Untitled Project';
+    let currentName = targetName || (mem as any).project_name || 'Untitled Project';
+    if (currentName === 'New Project' && !targetName) {
+      const promptName = prompt("Name this project before saving locally:", "My Project");
+      if (!promptName) return;
+      currentName = promptName.trim();
+      mem.project_name = currentName;
+    }
+    const projectName = currentName;
     const finalMode = targetMode || mem.project_mode || appMode;
+    mem.project_mode = finalMode;
+    ProjectMemory.saveMemory(mem);
 
     try {
       await LocalDB.set(STORE_FILES, projectId, targetFiles);

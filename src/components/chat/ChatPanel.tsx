@@ -159,18 +159,8 @@ export function ChatPanel({ files, setFiles, setLogs, clearChatTrigger, reloadCh
       // Check if current files are just the demo boilerplate
       const isDemo = Object.keys(files).length <= 4 && Object.values(files).some(content => content.includes("Hello ") && content.includes("from NovaAI"));
       
-      let wipeExisting = false;
-      if (!isDemo && Object.keys(files).length > 2) {
-        const wantsToModify = window.confirm("An existing project is loaded in the workspace. \n\nClick 'OK' to selectively UPDATE the existing files.\nClick 'Cancel' to WIPE the workspace and generate a completely new app.");
-        wipeExisting = !wantsToModify;
-        if (wipeExisting) {
-          setLogs(prev => [...prev, `[SYSTEM] User chose to wipe the existing workspace for clean generation.`]);
-        } else {
-          setLogs(prev => [...prev, `[SYSTEM] User chose to modify existing workspace.`]);
-        }
-      }
-      
-      const filesToSend = (isDemo || wipeExisting) ? {} : files;
+      const wipeExisting = false;
+      const filesToSend = isDemo ? {} : files;
       
       if (isDemo) {
          setLogs(prev => [...prev, `[SYSTEM] Wiping demo boilerplate for clean generation...`]);
