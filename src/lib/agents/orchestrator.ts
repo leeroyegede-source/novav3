@@ -25,6 +25,7 @@ export interface AgentContext {
   imageBase64?: string;
   history?: { role: string, content: string }[];
   appMode?: string;
+  omittedFiles?: string[];
 }
 
 export interface RoutingInfo {
@@ -46,17 +47,17 @@ export interface AgentRequest {
 }
 
 export interface StructuredChatResponse {
-  status: 'Complete' | 'Blocked' | 'Needs Review' | 'Unsafe' | 'Needs Incremental Build';
+  status: 'Complete' | 'Needs Step Plan' | 'Running Stage' | 'Blocked' | 'Needs User Input';
+  mode: string;
+  editMode: 'Surgical Patch' | 'Targeted Insert' | 'Adapter Wrap' | 'Multi-File Stage' | 'Full File Rewrite';
   task: string;
   plan: string;
+  filesSelected: string[];
   filesChanged: string[];
   changesMade: string;
-  testsRun: {
-    build: string;
-    preview: string;
-    runner: string;
-    e2e: string;
-  };
+  runnerCheck: 'passed' | 'failed' | 'not run';
+  previewCheck: 'passed' | 'failed' | 'not run';
+  saveCheck: 'Supabase saved' | 'not saved' | 'failed';
   safetyCheck: {
     snapshotCreated: boolean;
     secretsExposed: boolean;
@@ -173,41 +174,40 @@ PROJECT MEMORY CONTEXT:
 ${JSON.stringify(request.context.memory, null, 2)}
 Instructions: You MUST respect the Project Memory. Do not destroy known routes, APIs, or DB connections. If this is a continuation, build upon the previous work seamlessly without dropping files. If errors are noted in the memory, ensure your fix addresses them without repeating failures.
 
-CRITICAL RULES:
-1. The generated UI must use Tailwind CSS for styling. Do not use generic colors. Use modern typography and rich aesthetics.
-2. If building a Next.js application, you MUST strictly use the Pages Router (e.g., \`/pages/index.js\`, \`/pages/_app.js\`). Do NOT use the App Router (\`/app/page.js\`) because it is incompatible with the live browser container preview.
-3. CSS ENFORCEMENT: When generating or modifying CSS files, any \`@import\` rules (like Google Fonts) MUST be placed at the absolute top of the file, before any other rules, classes, or selectors. Failure to do this will crash the Next.js CSS parser.
-4. WORKFLOW ENFORCEMENT: The user has selected the App Mode: "${request.context.appMode || 'Auto Detect'}".
-   - Keep current router style, entry files, and do NOT change framework entry file rules. App Mode scaffold contract must be preserved.
-   - For Node / Express: You MUST bind the server to \`process.env.PORT\`. Do not hardcode ports.
-5. DEBUGGER ENFORCEMENT: If your role is "Debugger" or you are analyzing a terminal error, you MUST output the exact \`fileOperations.update\` JSON block that completely rewrites the broken file with the fixed syntax, missing imports, or corrected logic. Apply the smallest possible fix. Do not touch runner logic.
-6. TOKEN LIMIT AVOIDANCE: CRITICAL! You MUST ONLY include files in the \`fileOperations\` block that are ACTUALLY being modified, created, or deleted. DO NOT return the contents of files that you are not changing. Mirroring unmodified files will cause you to exceed maximum output tokens and crash the system.
-7. BUSINESS & ENGINEERING EXCELLENCE (THE "FOUNDER" MINDSET): Write code that is strictly modular, DRY, highly scalable, and secure. Anticipate edge cases.
-8. INCREMENTAL BUILD RULE (CRITICAL): You must build incrementally. Never generate a full large app or many files at once. If the request is large, create a staged plan and complete only the first safe step.
-   - Max files created per response: 3
-   - Max files updated per response: 5
-   - Max total file operations: 6
-   - Prefer patching existing files over rewriting full files. Do not output giant complete files unless absolutely required.
-   - If more work remains, say exactly what the next step is in the structuredResponse.nextStep.
-   - For Auto-Heal requests: fix only the smallest likely cause. Modify maximum 1-3 files. Do not rewrite the full app.
+NOVA AI MASTER AGENT BUILDER LOGIC (CRITICAL):
+1. CORE PRINCIPLES: Never rewrite the whole project. Always build in stages. Always obey app mode structure and runner contracts. Always use surgical modification by default. If you cannot find the correct file, ask the user to locate it instead of guessing.
+2. INTERACTIVE BUILD RULE: For medium/large/risky tasks, DO NOT start coding immediately. Respond with a Plan in the "message" field formatted exactly like:
+   Status: Needs Step Plan
+   Reason: <reason>
+   Plan: Stage 1: <goal>, Stage 2: <goal>...
+   Action: Reply "proceed stage 1" to start.
+   DO NOT include any fileOperations until the user replies "proceed".
+3. STRICT MODIFICATION RULE: Default to SURGICAL PATCH. Preserve imports, exports, handlers, and app mode structure.
+4. APP MODE RULES: The user has selected the App Mode: "${request.context.appMode || 'Auto Detect'}".
+   - React/Vite: Preserve package.json, index.html, src/main.jsx, src/App.jsx.
+   - Next.js: You MUST strictly use the Pages Router (\`/pages/index.js\`, \`/pages/_app.js\`). Do NOT use the App Router (\`/app/page.js\`).
+   - Node/Express: Preserve server.js/index.js. MUST bind to \`process.env.PORT\`.
+5. AUTO-HEAL: If this is an auto-heal request, capture error, patch exact issue (max 1-3 files). Do NOT rewrite the entire app to fix a small syntax error.
+6. DESIGN AESTHETICS: The generated UI must use Tailwind CSS and MUST be breathtaking. Use smooth gradients, drop shadows, rounded corners, and micro-animations. Make it feel premium.
+7. OMITTED FILES: Some files were omitted from this context to prevent token overflow. You will see them in the "omittedFiles" list. DO NOT attempt to write placeholder text into real files.
 
 Structure your JSON response exactly like this:
 {
   "role": "${request.role}",
-  "message": "A conversational response to the user explaining what you did.",
+  "message": "A conversational markdown response to the user. If completing a stage, format like: \nStatus: Complete\nChanged: [files]\nValidation: passed\nNext: Reply 'continue' to proceed.",
   "reasoning": "Internal reasoning for why you took this action.",
   "structuredResponse": {
-    "status": "Complete",
+    "status": "Complete" | "Needs Step Plan" | "Running Stage" | "Blocked" | "Needs User Input",
+    "mode": "${request.context.appMode || 'Auto Detect'}",
+    "editMode": "Surgical Patch" | "Targeted Insert" | "Adapter Wrap" | "Multi-File Stage" | "Full File Rewrite",
     "task": "short task description",
     "plan": "short safe plan",
-    "filesChanged": ["list", "of", "files"],
+    "filesSelected": ["files", "you", "read"],
+    "filesChanged": ["files", "you", "changed"],
     "changesMade": "clear explanation of changes",
-    "testsRun": {
-      "build": "not run",
-      "preview": "not run",
-      "runner": "not run",
-      "e2e": "not run"
-    },
+    "runnerCheck": "not run",
+    "previewCheck": "not run",
+    "saveCheck": "not saved",
     "safetyCheck": {
       "snapshotCreated": true,
       "secretsExposed": false,
@@ -215,7 +215,7 @@ Structure your JSON response exactly like this:
       "scaffoldChanged": false,
       "rollbackAvailable": true
     },
-    "nextStep": "recommended next action"
+    "nextStep": "proceed stage 1 | continue | locate file | fix error | review"
   },
   "fileOperations": {
     "create": { "/path/to/newfile.js": "file content..." },
@@ -227,8 +227,11 @@ Structure your JSON response exactly like this:
 AST Memory (Semantic Map of all exports and imports across the project):
 ${JSON.stringify(astMap, null, 2)}
 
-Current Files:
+Current Files in Context:
 ${JSON.stringify(request.context.files, null, 2)}
+
+Omitted Files (Too large for context):
+${JSON.stringify(request.context.omittedFiles || [], null, 2)}
 `;
 
   // Prepare vision payload if image is attached

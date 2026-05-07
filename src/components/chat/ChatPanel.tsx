@@ -57,8 +57,16 @@ export function ChatPanel({ files, setFiles, setLogs, clearChatTrigger, appMode 
 
   useEffect(() => {
     if (isHydrated) {
-      localStorage.setItem('nova_messages', JSON.stringify(messages));
-      localStorage.setItem('nova_history', JSON.stringify(history));
+      try {
+        localStorage.setItem('nova_messages', JSON.stringify(messages));
+      } catch (e) {
+        console.warn("localStorage quota exceeded for messages, relying on IndexedDB.");
+      }
+      try {
+        localStorage.setItem('nova_history', JSON.stringify(history));
+      } catch (e) {
+        console.warn("localStorage quota exceeded for history, relying on IndexedDB.");
+      }
       LocalDB.set(STORE_CHAT, 'nova_messages', messages).catch(console.error);
       LocalDB.set(STORE_CHAT, 'nova_history', history).catch(console.error);
     }
@@ -267,9 +275,13 @@ export function ChatPanel({ files, setFiles, setLogs, clearChatTrigger, appMode 
                <div className="mb-3 space-y-2 border border-slate-700/50 rounded-lg p-3 bg-slate-900/50">
                  <div className="flex justify-between items-center mb-2">
                    <span className="font-bold text-xs uppercase text-indigo-400">Agent Report</span>
-                   <span className={`text-[10px] px-2 py-0.5 rounded font-bold uppercase ${m.structuredResponse.status === 'Complete' ? 'bg-emerald-500/20 text-emerald-400' : m.structuredResponse.status === 'Needs Incremental Build' ? 'bg-indigo-500/20 text-indigo-400' : 'bg-amber-500/20 text-amber-400'}`}>
+                   <span className={`text-[10px] px-2 py-0.5 rounded font-bold uppercase ${m.structuredResponse.status === 'Complete' ? 'bg-emerald-500/20 text-emerald-400' : m.structuredResponse.status === 'Running Stage' ? 'bg-indigo-500/20 text-indigo-400' : 'bg-amber-500/20 text-amber-400'}`}>
                      {m.structuredResponse.status}
                    </span>
+                 </div>
+                 <div className="flex gap-2 mb-2">
+                    <span className="text-[10px] bg-slate-800 text-slate-300 px-2 py-0.5 rounded border border-slate-700">{m.structuredResponse.mode}</span>
+                    <span className="text-[10px] bg-slate-800 text-slate-300 px-2 py-0.5 rounded border border-slate-700">{m.structuredResponse.editMode}</span>
                  </div>
                  <div className="text-xs text-slate-300"><span className="text-slate-500 font-bold">Task:</span> {m.structuredResponse.task}</div>
                  <div className="text-xs text-slate-300"><span className="text-slate-500 font-bold">Plan:</span> {m.structuredResponse.plan}</div>
@@ -277,9 +289,10 @@ export function ChatPanel({ files, setFiles, setLogs, clearChatTrigger, appMode 
                  
                  <div className="mt-2 grid grid-cols-2 gap-2 text-[10px]">
                    <div className="bg-slate-950 p-2 rounded border border-slate-800">
-                     <span className="font-bold text-slate-500 block mb-1">Tests</span>
-                     <div>Build: <span className={m.structuredResponse.testsRun?.build.includes('pass') ? 'text-emerald-400' : 'text-slate-300'}>{m.structuredResponse.testsRun?.build}</span></div>
-                     <div>Runner: <span className={m.structuredResponse.testsRun?.runner.includes('pass') ? 'text-emerald-400' : 'text-slate-300'}>{m.structuredResponse.testsRun?.runner}</span></div>
+                     <span className="font-bold text-slate-500 block mb-1">Status Checks</span>
+                     <div>Runner: <span className={m.structuredResponse.runnerCheck?.includes('pass') ? 'text-emerald-400' : 'text-slate-300'}>{m.structuredResponse.runnerCheck}</span></div>
+                     <div>Preview: <span className={m.structuredResponse.previewCheck?.includes('pass') ? 'text-emerald-400' : 'text-slate-300'}>{m.structuredResponse.previewCheck}</span></div>
+                     <div>Save: <span className={m.structuredResponse.saveCheck?.includes('saved') ? 'text-emerald-400' : 'text-slate-300'}>{m.structuredResponse.saveCheck}</span></div>
                    </div>
                    <div className="bg-slate-950 p-2 rounded border border-slate-800">
                      <span className="font-bold text-slate-500 block mb-1">Safety</span>

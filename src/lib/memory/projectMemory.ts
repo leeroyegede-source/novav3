@@ -46,7 +46,7 @@ export class ProjectMemory {
     
     // Fallback if not initialized yet
     return {
-      project_id: crypto.randomUUID(),
+      project_id: this.generateUUID(),
       project_name: 'New Project',
       project_mode: 'Auto Detect',
       framework: 'Unknown',
@@ -58,7 +58,7 @@ export class ProjectMemory {
 
   static clearMemory(): ProjectMemoryState {
     const cleanState: ProjectMemoryState = {
-      project_id: crypto.randomUUID(),
+      project_id: this.generateUUID(),
       project_name: 'New Project',
       project_mode: 'Auto Detect',
       framework: 'Unknown',
@@ -90,7 +90,7 @@ export class ProjectMemory {
     const state = this.getMemory();
     state.items.push({
       ...item,
-      id: Math.random().toString(36).substring(7),
+      id: this.generateUUID(),
       created_at: Date.now()
     });
     this.saveMemory(state);
@@ -124,5 +124,15 @@ export class ProjectMemory {
     const state = this.getMemory();
     state.items = state.items.filter(i => i.type !== 'error');
     this.saveMemory(state);
+  }
+
+  static generateUUID(): string {
+    if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+      return crypto.randomUUID();
+    }
+    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+      const r = Math.random() * 16 | 0, v = c === 'x' ? r : (r & 0x3 | 0x8);
+      return v.toString(16);
+    });
   }
 }

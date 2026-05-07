@@ -35,7 +35,7 @@ export class ProjectScanner {
         const envKeys = content.split('\n').map(l => l.split('=')[0]).filter(k => k && !k.startsWith('#'));
         if (envKeys.length > 0) {
           memory.items.push({
-            id: Math.random().toString(36).substring(7),
+            id: ProjectMemory.generateUUID(),
             type: 'env',
             title: 'Environment Variables',
             content: `Variables required: ${envKeys.join(', ')}`,
@@ -49,23 +49,23 @@ export class ProjectScanner {
       // Next.js specifics
       if (isNextJs) {
         if (path.includes('/app/api/') && path.endsWith('route.ts')) {
-          memory.items.push({ id: Math.random().toString(36).substring(7), type: 'api', title: `API Route: ${path}`, content: 'Next.js API Handler', source_file: path, importance: 'medium', created_at: Date.now() });
+          memory.items.push({ id: ProjectMemory.generateUUID(), type: 'api', title: `API Route: ${path}`, content: 'Next.js API Handler', source_file: path, importance: 'medium', created_at: Date.now() });
         } else if (path.includes('/app/') && (path.endsWith('page.tsx') || path.endsWith('layout.tsx'))) {
-          memory.items.push({ id: Math.random().toString(36).substring(7), type: 'route', title: `App Route: ${path}`, content: 'Next.js Page/Layout', source_file: path, importance: 'high', created_at: Date.now() });
+          memory.items.push({ id: ProjectMemory.generateUUID(), type: 'route', title: `App Route: ${path}`, content: 'Next.js Page/Layout', source_file: path, importance: 'high', created_at: Date.now() });
         } else if (path.includes('/components/')) {
-          memory.items.push({ id: Math.random().toString(36).substring(7), type: 'component', title: `Component: ${path.split('/').pop()}`, content: 'React Component', source_file: path, importance: 'medium', created_at: Date.now() });
+          memory.items.push({ id: ProjectMemory.generateUUID(), type: 'component', title: `Component: ${path.split('/').pop()}`, content: 'React Component', source_file: path, importance: 'medium', created_at: Date.now() });
         }
       }
       // Express specifics
       else if (isExpress) {
         if (path.includes('/routes/') || path.includes('/controllers/')) {
-          memory.items.push({ id: Math.random().toString(36).substring(7), type: 'api', title: `Express Route: ${path}`, content: 'Backend API logic', source_file: path, importance: 'high', created_at: Date.now() });
+          memory.items.push({ id: ProjectMemory.generateUUID(), type: 'api', title: `Express Route: ${path}`, content: 'Backend API logic', source_file: path, importance: 'high', created_at: Date.now() });
         }
       }
       // React Vite specifics
       else if (isReactVite) {
         if (path.includes('/src/components/')) {
-          memory.items.push({ id: Math.random().toString(36).substring(7), type: 'component', title: `Component: ${path.split('/').pop()}`, content: 'React Component', source_file: path, importance: 'medium', created_at: Date.now() });
+          memory.items.push({ id: ProjectMemory.generateUUID(), type: 'component', title: `Component: ${path.split('/').pop()}`, content: 'React Component', source_file: path, importance: 'medium', created_at: Date.now() });
         }
       }
     });

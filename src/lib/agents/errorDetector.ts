@@ -143,7 +143,7 @@ export class ErrorDetector {
     const safeToFix = this.isSafeToAutoFix(classification.type, maskedLog) && repetition.previousAttempts.length < 3;
 
     const report: ErrorReport = {
-      error_id: Math.random().toString(36).substring(7),
+      error_id: ProjectMemory.generateUUID(),
       project_id: ProjectMemory.getMemory().project_id,
       version_id: 'latest', // Ideally linked to VersionManager
       mode,

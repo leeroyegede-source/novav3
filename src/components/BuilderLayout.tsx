@@ -435,9 +435,41 @@ export function BuilderLayout({ userEmail }: { userEmail?: string }) {
     
     VersionManager.clearHistory();
     
-    const newFiles = {
+    let newFiles: Record<string, string> = {
       "/App.js": `export default function App() {\n  return <div>New ${newProjectMode} Project</div>;\n}`
     };
+    
+    if (newProjectMode === "Next.js") {
+      newFiles = {
+        "/pages/index.js": `export default function Home() {\n  return <div className="min-h-screen bg-slate-900 text-white flex items-center justify-center font-bold text-2xl">\\n    <div className="flex flex-col items-center gap-4">\\n      <div className="w-16 h-16 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin"></div>\\n      NOVA-RUNNER-OK\\n    </div>\\n  </div>;\n}`,
+        "/pages/_app.js": `import '../styles/globals.css';\n\nexport default function App({ Component, pageProps }) {\n  return <Component {...pageProps} />;\n}`,
+        "/styles/globals.css": `@tailwind base;\n@tailwind components;\n@tailwind utilities;\n\nbody { background-color: #0f172a; color: white; }`,
+        "/package.json": `{\n  "name": "nova-nextjs",\n  "version": "1.0.0",\n  "private": true,\n  "scripts": {\n    "dev": "next dev",\n    "build": "next build",\n    "start": "next start"\n  },\n  "dependencies": {\n    "next": "14.2.5",\n    "react": "18.3.1",\n    "react-dom": "18.3.1"\n  },\n  "devDependencies": {\n    "autoprefixer": "^10.4.19",\n    "postcss": "^8.4.39",\n    "tailwindcss": "^3.4.7"\n  }\n}`
+      };
+    } else if (newProjectMode === "React / Vite") {
+      newFiles = {
+        "/index.html": `<!DOCTYPE html>\n<html lang="en">\n  <head>\n    <meta charset="UTF-8" />\n    <meta name="viewport" content="width=device-width, initial-scale=1.0" />\n    <title>Vite App</title>\n  </head>\n  <body>\n    <div id="root"></div>\n    <script type="module" src="/src/main.jsx"></script>\n  </body>\n</html>`,
+        "/src/main.jsx": `import React from 'react';\nimport ReactDOM from 'react-dom/client';\nimport App from './App.jsx';\nimport './index.css';\n\nReactDOM.createRoot(document.getElementById('root')).render(\n  <React.StrictMode>\n    <App />\n  </React.StrictMode>,\n);`,
+        "/src/App.jsx": `export default function App() {\n  return <div className="min-h-screen bg-slate-900 text-white flex items-center justify-center font-bold text-2xl">\\n    <div className="flex flex-col items-center gap-4">\\n      <div className="w-16 h-16 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin"></div>\\n      NOVA-RUNNER-OK\\n    </div>\\n  </div>;\n}`,
+        "/src/index.css": `@tailwind base;\n@tailwind components;\n@tailwind utilities;\n\nbody { background-color: #0f172a; color: white; }`,
+        "/package.json": `{\n  "name": "vite-project",\n  "version": "0.0.0",\n  "scripts": {\n    "dev": "vite",\n    "build": "vite build",\n    "preview": "vite preview"\n  },\n  "dependencies": {\n    "react": "^18.3.1",\n    "react-dom": "^18.3.1"\n  },\n  "devDependencies": {\n    "@vitejs/plugin-react": "^4.3.1",\n    "autoprefixer": "^10.4.19",\n    "postcss": "^8.4.39",\n    "tailwindcss": "^3.4.7",\n    "vite": "^5.4.0"\n  }\n}`,
+        "/vite.config.js": `import { defineConfig } from 'vite';\nimport react from '@vitejs/plugin-react';\n\nexport default defineConfig({\n  plugins: [react()],\n});`
+      };
+    } else if (newProjectMode === "Node / Express") {
+      newFiles = {
+        "/index.js": `const express = require('express');\nconst app = express();\nconst port = process.env.PORT || 3000;\n\napp.get('/', (req, res) => {\n  res.send('<h1>NOVA-RUNNER-OK</h1>');\n});\n\napp.listen(port, () => {\n  console.log(\`Server running on port \${port}\`);\n});`,
+        "/package.json": `{\n  "name": "node-express",\n  "version": "1.0.0",\n  "main": "index.js",\n  "scripts": {\n    "start": "node index.js",\n    "dev": "nodemon index.js"\n  },\n  "dependencies": {\n    "express": "^4.19.2"\n  }\n}`
+      };
+    } else if (newProjectMode === "PHP Native") {
+      newFiles = {
+        "/index.php": `<?php\n  echo "<h1>NOVA-RUNNER-OK</h1>";\n?>`
+      };
+    } else if (newProjectMode === "Laravel") {
+      newFiles = {
+        "/artisan": `// Mock Laravel artisan`,
+        "/routes/web.php": `<?php\n\nuse Illuminate\\Support\\Facades\\Route;\n\nRoute::get('/', function () {\n    return '<h1>NOVA-RUNNER-OK</h1>';\n});`
+      };
+    }
     
     setFiles(newFiles);
     setAppMode(newProjectMode);

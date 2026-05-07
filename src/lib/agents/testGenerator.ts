@@ -95,7 +95,7 @@ ${apiTests}
     }
 
     return {
-      id: Math.random().toString(36).substring(7),
+      id: ProjectMemory.generateUUID(),
       name: 'E2E Regression Suite',
       files: generatedFiles
     };

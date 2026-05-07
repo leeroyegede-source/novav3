@@ -62,7 +62,7 @@ export class VersionManager {
     const projectId = mem.project_id;
     
     const snapshot: ProjectSnapshot = {
-      id: Math.random().toString(36).substring(7),
+      id: ProjectMemory.generateUUID(),
       timestamp: Date.now(),
       files,
       message,
