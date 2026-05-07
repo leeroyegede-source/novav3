@@ -27,7 +27,7 @@ export function LogsPanel({ logs, onCommand, onSelfHeal }: LogsPanelProps) {
       </div>
       <div className="flex-1 overflow-y-auto p-4 bg-black font-mono text-xs text-emerald-400 space-y-1 pb-12">
         {logs.map((log, i) => {
-          const isError = log.includes('[ERROR]') || log.toLowerCase().includes('error:') || log.includes('ERR!');
+          const isError = log.includes('[ERROR]') || log.includes('[BROWSER RUNTIME ERROR]') || log.toLowerCase().includes('error:') || log.includes('ERR!');
           return (
             <div key={i} className={`flex items-start justify-between ${isError ? 'text-rose-400' : ''}`}>
               <span className="whitespace-pre-wrap flex-1">{log}</span>

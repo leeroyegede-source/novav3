@@ -318,8 +318,12 @@ export function BuilderLayout({ userEmail }: { userEmail?: string }) {
     try {
       const mem = ProjectMemory.getMemory();
       if (mem.project_id === projId) {
-        alert("You cannot delete the currently open project. Please start a new project first.");
-        return;
+        setFiles({});
+        setActiveFile(null);
+        setClearChatTrigger(prev => prev + 1);
+        ProjectMemory.clearMemory();
+        VersionManager.clearHistory();
+        try { await LocalDB.remove(STORE_FILES, projId); } catch(e) {}
       }
       
       const { data: sessionData } = await supabase.auth.getSession();
@@ -508,6 +512,16 @@ export function BuilderLayout({ userEmail }: { userEmail?: string }) {
       localStorage.setItem('nova_appMode', appMode);
     }
   }, [appMode, isHydrated]);
+
+  useEffect(() => {
+    const handleMessage = (e: MessageEvent) => {
+      if (e.data && e.data.type === 'BROWSER_ERROR') {
+        setLogs(prev => [...prev, `[BROWSER RUNTIME ERROR] ${e.data.payload}`]);
+      }
+    };
+    window.addEventListener('message', handleMessage);
+    return () => window.removeEventListener('message', handleMessage);
+  }, []);
 
   const handleModeChange = (newMode: string, currentFiles?: Record<string, string>) => {
     setAppMode(newMode);
@@ -779,6 +793,18 @@ export function BuilderLayout({ userEmail }: { userEmail?: string }) {
 
   const handleTerminalCommand = async (cmd: string) => {
     setLogs(prev => [...prev, `> ${cmd}`]);
+    
+    if (cmd.trim().toLowerCase() === 'nova heal') {
+       // Look for the most recent error
+       const lastError = logs.slice().reverse().find(l => l.includes('[ERROR]') || l.includes('[BROWSER RUNTIME ERROR]') || l.toLowerCase().includes('error:') || l.includes('ERR!'));
+       if (!lastError) {
+         setLogs(prev => [...prev, `[SYSTEM] No recent errors found in terminal to heal.`]);
+         return;
+       }
+       handleSelfHeal(lastError);
+       return;
+    }
+
     try {
       const res = await fetch('/api/runtime/terminal', {
         method: 'POST',

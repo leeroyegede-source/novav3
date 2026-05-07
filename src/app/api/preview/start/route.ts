@@ -60,7 +60,28 @@ export async function POST(req: Request) {
             continue;
         }
 
-        fs.writeFileSync(fullPath, content as string, 'utf-8');
+        // Inject Auto-Heal Spy Script
+        let finalContent = content as string;
+        if (safePath.endsWith('.html') || safePath.endsWith('_app.js') || safePath.endsWith('_document.js')) {
+            const spyScript = `
+<script>
+  window.onerror = function(message, source, lineno, colno, error) {
+    window.parent.postMessage({ type: 'BROWSER_ERROR', payload: \`\${message} at \${source}:\${lineno}\` }, '*');
+  };
+  window.addEventListener('unhandledrejection', function(event) {
+    window.parent.postMessage({ type: 'BROWSER_ERROR', payload: event.reason ? event.reason.stack || event.reason.message || event.reason : 'Unhandled Promise Rejection' }, '*');
+  });
+</script>
+`;
+            if (safePath.endsWith('.html') && finalContent.includes('<head>')) {
+                finalContent = finalContent.replace('<head>', '<head>' + spyScript);
+            } else if ((safePath.endsWith('_app.js') || safePath.endsWith('_document.js')) && finalContent.includes('return')) {
+                // Next.js injection is trickier without breaking React tree, so we skip it for now or do it via next.config.js later
+                // Just fallback to Vite for now
+            }
+        }
+
+        fs.writeFileSync(fullPath, finalContent, 'utf-8');
       }
 
       // Git-Backed Checkpointing

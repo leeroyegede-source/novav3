@@ -73,10 +73,11 @@ export function ChatPanel({ files, setFiles, setLogs, clearChatTrigger, appMode 
   }, [messages, history, isHydrated]);
 
   useEffect(() => {
-    if (clearChatTrigger) {
+    if (clearChatTrigger && clearChatTrigger > 0) {
       setMessages([{ role: 'agent', content: "Welcome to NovaAI! Describe the app you want to build or drop a design screenshot."}]);
       setHistory([files]);
       setTimelineIndex(0);
+      setLogs(prev => [...prev, "[SYSTEM] Chat history and snapshots cleared."]);
       LocalDB.remove(STORE_CHAT, 'nova_messages').catch(console.error);
       LocalDB.remove(STORE_CHAT, 'nova_history').catch(console.error);
       localStorage.removeItem('nova_messages');
@@ -235,11 +236,7 @@ export function ChatPanel({ files, setFiles, setLogs, clearChatTrigger, appMode 
     setLogs(prev => [...prev, "[SYSTEM] Chat history and snapshots cleared."]);
   };
 
-  useEffect(() => {
-    if (clearChatTrigger && clearChatTrigger > 0) {
-      handleClearChat();
-    }
-  }, [clearChatTrigger]);
+
 
   const [progressMsg, setProgressMsg] = useState("Initializing...");
   useEffect(() => {
