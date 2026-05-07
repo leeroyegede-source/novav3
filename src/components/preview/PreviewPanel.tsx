@@ -1,9 +1,12 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { SandpackProvider, SandpackPreview, SandpackConsole } from "@codesandbox/sandpack-react";
 import { Loader2, Play, Square, RefreshCw, Terminal, Globe, Monitor, Smartphone, TabletIcon, Maximize } from 'lucide-react';
+import { useDockerRunner } from '@/hooks/useDockerRunner';
+import { DockerPreviewPanel } from '@/components/preview/DockerPreviewPanel';
 
 export function PreviewPanel({ files, appMode, onLogsUpdate }: { files: Record<string, string>, appMode: string, onLogsUpdate?: (logs: string[]) => void }) {
   const [containerInfo, setContainerInfo] = useState<any>(null);
+  const { isDockerLoading, dockerPreviewUrl, dockerError, runInDocker, closeDockerPreview } = useDockerRunner();
   const [currentPath, setCurrentPath] = useState("/");
   const [urlInput, setUrlInput] = useState("");
   const [booting, setBooting] = useState(false);
@@ -133,6 +136,13 @@ export function PreviewPanel({ files, appMode, onLogsUpdate }: { files: Record<s
         <div className="flex items-center gap-2">
           {!isFrontendMode && (
             <>
+              <button 
+                onClick={() => runInDocker(projectId, files)} 
+                disabled={isDockerLoading}
+                className="flex items-center gap-1 px-3 py-1 mr-2 text-sm bg-blue-600 hover:bg-blue-700 text-white rounded transition-colors disabled:opacity-50"
+              >
+                {isDockerLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Play className="w-4 h-4" />} Run in Docker
+              </button>
               {!containerInfo ? (
                 <button onClick={startContainer} disabled={booting} className="flex items-center gap-1 px-3 py-1 text-sm bg-indigo-600 hover:bg-indigo-700 text-white rounded transition-colors disabled:opacity-50">
                   {booting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Play className="w-4 h-4" />} Start
@@ -174,6 +184,21 @@ export function PreviewPanel({ files, appMode, onLogsUpdate }: { files: Record<s
       </div>
 
       <div className="flex-1 relative flex flex-col min-h-0 bg-white">
+        {dockerError && (
+          <div className="absolute top-4 left-4 right-4 p-4 bg-red-900/90 border border-red-500 text-red-200 rounded text-sm z-30 shadow-lg">
+            <h4 className="font-bold mb-1">Docker Runner Error</h4>
+            <p className="whitespace-pre-wrap">{dockerError}</p>
+            <button onClick={() => runInDocker(projectId, files)} className="mt-2 text-xs underline text-red-300 hover:text-white mr-4">Retry</button>
+            <button onClick={closeDockerPreview} className="mt-2 text-xs underline text-red-300 hover:text-white">Dismiss</button>
+          </div>
+        )}
+
+        {dockerPreviewUrl && (
+          <div className="absolute inset-0 z-10 bg-slate-900">
+            <DockerPreviewPanel previewUrl={dockerPreviewUrl} onClose={closeDockerPreview} />
+          </div>
+        )}
+
         {error && (
           <div className="absolute top-4 left-4 right-4 p-4 bg-red-900/90 border border-red-500 text-red-200 rounded text-sm z-30 shadow-lg">
             <h4 className="font-bold mb-1">Error starting container</h4>
