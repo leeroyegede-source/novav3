@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { ProjectMemory } from '@/lib/memory/projectMemory';
 import { VersionManager } from '@/lib/memory/versionManager';
 import { Save, Play, CheckCircle2, AlertTriangle, Cloud, RotateCcw, LayoutPanelLeft, PanelBottom, Settings2, History, GitBranch, FastForward, MoreHorizontal, Trash2 } from 'lucide-react';
+import { DebugPanel } from '@/components/editor/DebugPanel';
 
 interface BuilderTopBarProps {
   onToggleRight: () => void;
@@ -131,6 +132,8 @@ export function BuilderTopBar({ onToggleRight, onToggleBottom, onOpenVersions, a
              {isFailed ? <AlertTriangle className="w-3 h-3 text-rose-500" /> : <CheckCircle2 className="w-3 h-3 text-emerald-500" />}
              Tests
           </div>
+          
+          <DebugPanel />
           
           <select 
               value={appMode} 

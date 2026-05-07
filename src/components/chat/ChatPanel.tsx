@@ -4,7 +4,7 @@ import { VersionManager } from '@/lib/memory/versionManager';
 import { ProjectMemory } from '@/lib/memory/projectMemory';
 import { LocalDB, STORE_CHAT } from '@/lib/storage/indexedDB';
 
-export function ChatPanel({ files, setFiles, setLogs, clearChatTrigger, appMode }: { files: Record<string, string>, setFiles: (f: Record<string, string>) => void, setLogs: (cb: (prev: string[]) => string[]) => void, clearChatTrigger?: number, appMode?: string }) {
+export function ChatPanel({ files, setFiles, setLogs, clearChatTrigger, reloadChatTrigger, appMode }: { files: Record<string, string>, setFiles: (f: Record<string, string>) => void, setLogs: (cb: (prev: string[]) => string[]) => void, clearChatTrigger?: number, reloadChatTrigger?: number, appMode?: string }) {
   const [prompt, setPrompt] = useState("");
   const [messages, setMessages] = useState<{role: string, content: string, reasoning?: string, image?: string}[]>([{ role: 'agent', content: "Welcome to NovaAI! Describe the app you want to build or drop a design screenshot."}]);
   const [isGenerating, setIsGenerating] = useState(false);
@@ -84,6 +84,31 @@ export function ChatPanel({ files, setFiles, setLogs, clearChatTrigger, appMode 
       localStorage.removeItem('nova_history');
     }
   }, [clearChatTrigger]);
+
+  useEffect(() => {
+    if (reloadChatTrigger && reloadChatTrigger > 0) {
+      const reloadStorage = async () => {
+        try {
+          const savedMsgs = await LocalDB.get<any[]>(STORE_CHAT, 'nova_messages');
+          const savedHistory = await LocalDB.get<Record<string, string>[]>(STORE_CHAT, 'nova_history');
+          
+          if (savedMsgs) setMessages(savedMsgs);
+          else setMessages([{ role: 'agent', content: "Welcome to NovaAI! Describe the app you want to build or drop a design screenshot."}]);
+
+          if (savedHistory) {
+            setHistory(savedHistory);
+            setTimelineIndex(savedHistory.length - 1);
+          } else {
+            setHistory([files]);
+            setTimelineIndex(0);
+          }
+        } catch (e) {
+          console.error("LocalDB Reload Error:", e);
+        }
+      };
+      reloadStorage();
+    }
+  }, [reloadChatTrigger]);
 
   useEffect(() => {
     const handleScrubExternal = (e: any) => {

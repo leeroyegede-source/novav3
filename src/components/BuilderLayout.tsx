@@ -25,7 +25,9 @@ import { PreviewPanel } from '@/components/preview/PreviewPanel';
 import { AppModeSelector } from '@/components/AppModeSelector';
 import { LogsPanel } from '@/components/preview/LogsPanel';
 import { RuntimeIndicator } from '@/components/preview/RuntimeIndicator';
-import { Upload, FolderUp, Rocket, Loader2, DownloadCloud, Trash2, StopCircle, GitBranch, Plus, Save, Clock, MessageSquare, Folder, Code, Terminal, Play, MoreHorizontal, Settings2, History } from 'lucide-react';
+import { CloudSyncManager } from '@/lib/storage/cloudSync';
+import { CloudProjectsModal } from '@/components/editor/CloudProjectsModal';
+import { Cloud, Upload, FolderUp, Rocket, Loader2, DownloadCloud, Trash2, StopCircle, GitBranch, Plus, Save, Clock, MessageSquare, Folder, Code, Terminal, Play, MoreHorizontal, Settings2, History } from 'lucide-react';
 
 export function BuilderLayout({ userEmail }: { userEmail?: string }) {
   const [appMode, setAppMode] = useState("Auto Detect");
@@ -39,6 +41,7 @@ export function BuilderLayout({ userEmail }: { userEmail?: string }) {
   const [deployUrl, setDeployUrl] = useState<string | null>(null);
   const [isHydrated, setIsHydrated] = useState(false);
   const [clearChatTrigger, setClearChatTrigger] = useState(0);
+  const [reloadChatTrigger, setReloadChatTrigger] = useState(0);
   const autoHealTriggeredRef = useRef(false);
   const deployAbortControllerRef = useRef<AbortController | null>(null);
   const deployIntervalRef = useRef<NodeJS.Timeout | null>(null);
@@ -49,6 +52,22 @@ export function BuilderLayout({ userEmail }: { userEmail?: string }) {
   const [showNewProjectModal, setShowNewProjectModal] = useState(false);
   const [newProjectName, setNewProjectName] = useState("");
   const [newProjectMode, setNewProjectMode] = useState("Next.js");
+  const [showCloudModal, setShowCloudModal] = useState(false);
+  const [isCloudSaving, setIsCloudSaving] = useState(false);
+
+  const handleSaveToCloud = async () => {
+    setIsCloudSaving(true);
+    setLogs(prev => [...prev, '[SYSTEM] Saving project to cloud...']);
+    const mem = ProjectMemory.getMemory();
+    const { success, error } = await CloudSyncManager.saveToCloud(mem.project_id, files, mem.project_name || 'Untitled Project');
+    if (success) {
+      setLogs(prev => [...prev, '[SYSTEM] Synced to Cloud successfully.']);
+    } else {
+      setLogs(prev => [...prev, `[ERROR] Cloud Save Failed: ${error}`]);
+      alert(`Cloud Save Failed: ${error}`);
+    }
+    setIsCloudSaving(false);
+  };
 
   useEffect(() => {
     // Storage initialization is handled by initStorage below.
@@ -173,62 +192,9 @@ export function BuilderLayout({ userEmail }: { userEmail?: string }) {
     const projectName = targetName || (mem as any).project_name || 'Untitled Project';
     const finalMode = targetMode || mem.project_mode || appMode;
 
-    const { data: sessionData } = await supabase.auth.getSession();
-    const user = sessionData?.session?.user;
-    
-    if (!user) {
-      alert("Please log in to save projects");
-      setLogs(prev => [...prev, '[SYSTEM] Not logged in to Supabase. Cannot save.']);
-      return;
-    }
-
-    setLogs(prev => [...prev, '[SYSTEM] Saving to Supabase cloud...']);
     try {
-      const { error: projError } = await supabase.from('projects').upsert({
-        id: projectId,
-        user_id: user.id,
-        name: projectName,
-        app_mode: finalMode,
-        source: 'supabase',
-        updated_at: new Date().toISOString()
-      }, { onConflict: 'id' });
+      await LocalDB.set(STORE_FILES, projectId, targetFiles);
       
-      if (projError) {
-        if (projError.code === '42P01') {
-          throw new Error("Supabase project storage tables are missing. Run SQL setup.");
-        }
-        throw projError;
-      }
-
-      await supabase.from('project_files').delete().eq('project_id', projectId);
-      
-      const fileInserts = Object.entries(targetFiles).map(([file_path, content]) => ({
-        project_id: projectId,
-        file_path,
-        content
-      }));
-      
-      if (fileInserts.length > 0) {
-        const { error: filesError } = await supabase.from('project_files').insert(fileInserts);
-        if (filesError) throw filesError;
-      }
-
-      await supabase.from('project_memory').upsert({
-        project_id: projectId,
-        memory_summary: mem.memory_summary || '',
-        updated_at: new Date().toISOString()
-      }, { onConflict: 'project_id' });
-
-      const versionId = Math.random().toString(36).substring(7);
-      const { error: versionError } = await supabase.from('project_versions').insert({
-        id: versionId,
-        project_id: projectId,
-        files: targetFiles,
-        message: 'Manual Save',
-        preview_state: 'pending'
-      });
-      if (versionError) console.warn("Failed to save version snapshot");
-
       const recent = JSON.parse(localStorage.getItem('nova_recent_projects') || '[]');
       const existingIdx = recent.findIndex((p: any) => p.id === projectId);
       const newProject = {
@@ -236,7 +202,7 @@ export function BuilderLayout({ userEmail }: { userEmail?: string }) {
         name: projectName,
         mode: finalMode,
         time: Date.now(),
-        source: 'supabase'
+        source: 'local'
       };
       if (existingIdx >= 0) recent[existingIdx] = newProject;
       else recent.unshift(newProject);
@@ -246,16 +212,15 @@ export function BuilderLayout({ userEmail }: { userEmail?: string }) {
       window.dispatchEvent(new CustomEvent('nova-recent-updated'));
       
       if (!targetName) {
-        setLogs(prev => [...prev, '[SYSTEM] Project saved successfully to Supabase!']);
-        alert('Project saved to Supabase');
+        setLogs(prev => [...prev, '[SYSTEM] Project saved locally to IndexedDB.']);
       }
     } catch (err: any) {
       alert(err.message);
-      setLogs(prev => [...prev, `[ERROR] Supabase Save Failed: ${err.message}`]);
+      setLogs(prev => [...prev, `[ERROR] Local Save Failed: ${err.message}`]);
     }
   };
 
-  const loadProject = async (projId: string) => {
+    const loadProject = async (projId: string) => {
     try {
       const recentStr = localStorage.getItem('nova_recent_projects');
       let meta: any = null;
@@ -264,27 +229,13 @@ export function BuilderLayout({ userEmail }: { userEmail?: string }) {
         meta = recent.find((p: any) => p.id === projId);
       }
 
-      setLogs(prev => [...prev, `[SYSTEM] Loading project ${projId} from supabase...`]);
+      setLogs(prev => [...prev, `[SYSTEM] Loading project ${projId} from IndexedDB...`]);
       
       let savedFiles: Record<string, string> | null = null;
-      
-      const { data: filesData, error } = await supabase
-        .from('project_files')
-        .select('file_path, content')
-        .eq('project_id', projId);
-
-      if (error) {
-         if (error.code === '42P01') {
-            throw new Error("Supabase project tables are not set up yet. Run the project storage SQL in Supabase.");
-         }
-         throw error;
-      }
-      
-      if (filesData && filesData.length > 0) {
-        savedFiles = {};
-        filesData.forEach(f => {
-          savedFiles![f.file_path] = f.content;
-        });
+      try {
+        savedFiles = await LocalDB.get(STORE_FILES, projId);
+      } catch (e) {
+        console.error("LocalDB Error", e);
       }
       
       if (savedFiles) {
@@ -295,17 +246,15 @@ export function BuilderLayout({ userEmail }: { userEmail?: string }) {
            mem.project_id = projId;
            (mem as any).project_name = meta.name;
            mem.project_mode = meta.mode;
-           
-           supabase.from('project_memory').select('memory_summary').eq('project_id', projId).single().then(({ data, error }) => {
-              if (!error && data && data.memory_summary) mem.memory_summary = data.memory_summary;
-              ProjectMemory.saveMemory(mem);
-           });
+           ProjectMemory.saveMemory(mem);
         }
         
         setShowStartScreen(false);
         setLogs(prev => [...prev, `[SYSTEM] Project loaded successfully.`]);
+        
+        setReloadChatTrigger(prev => prev + 1);
       } else {
-        alert("Project files not found.");
+        alert("Project files not found locally.");
       }
     } catch (e: any) {
       console.error(e);
@@ -326,25 +275,26 @@ export function BuilderLayout({ userEmail }: { userEmail?: string }) {
         try { await LocalDB.remove(STORE_FILES, projId); } catch(e) {}
       }
       
-      const { data: sessionData } = await supabase.auth.getSession();
-      const user = sessionData?.session?.user;
-      if (!user) {
-        alert("Please log in to delete projects");
-        return;
-      }
-
-      const { error } = await supabase.from('projects').delete().match({ id: projId, user_id: user.id });
-      if (error) {
-         if (error.code === '42P01') {
-            alert("Supabase project tables are not set up yet.");
-         } else {
-            throw error;
-         }
-      }
-      
+      // Update local storage recent list
       const recent = JSON.parse(localStorage.getItem('nova_recent_projects') || '[]');
       const filtered = recent.filter((p: any) => p.id !== projId);
       localStorage.setItem('nova_recent_projects', JSON.stringify(filtered));
+      window.dispatchEvent(new CustomEvent('nova-recent-updated'));
+      setLogs(prev => [...prev, `[SYSTEM] Project deleted locally.`]);
+      
+      if (window.confirm("Do you also want to delete the cloud backup for this project?")) {
+        const { success, error } = await CloudSyncManager.deleteCloudBackup(projId);
+        if (success) {
+          setLogs(prev => [...prev, `[SYSTEM] Cloud backup deleted successfully.`]);
+        } else {
+           if (error === 'User not authenticated') {
+               alert("Please log in to delete cloud backups.");
+           } else {
+               alert(`Failed to delete cloud backup: ${error}`);
+           }
+        }
+      }
+      
       
       window.dispatchEvent(new CustomEvent('nova-recent-updated'));
       setLogs(prev => [...prev, `[SYSTEM] Project deleted successfully.`]);
@@ -1002,6 +952,7 @@ export function BuilderLayout({ userEmail }: { userEmail?: string }) {
               setFiles={setFiles} 
               setLogs={setLogs} 
               clearChatTrigger={clearChatTrigger} 
+              reloadChatTrigger={reloadChatTrigger}
               appMode={appMode}
             />
           </div>
@@ -1033,6 +984,12 @@ export function BuilderLayout({ userEmail }: { userEmail?: string }) {
                 Errors {errorCount > 0 && `(${errorCount})`}
               </button>
               <div className="flex items-center gap-2 ml-auto">
+                <button onClick={handleSaveToCloud} disabled={isCloudSaving} className={`text-blue-500 hover:text-blue-400 ${isCloudSaving ? 'animate-pulse' : ''}`} title="Save to Cloud">
+                  <Cloud className="w-3.5 h-3.5" />
+                </button>
+                <button onClick={() => setShowCloudModal(true)} className="text-slate-400 hover:text-slate-300" title="Cloud Projects">
+                  <History className="w-3.5 h-3.5" />
+                </button>
                 <button onClick={handleClearFiles} className="text-rose-500 hover:text-rose-400" title="Clear Workspace">
                   <Trash2 className="w-3.5 h-3.5" />
                 </button>
@@ -1230,6 +1187,19 @@ export function BuilderLayout({ userEmail }: { userEmail?: string }) {
         
         </div>
       </div>
+
+      {showCloudModal && (
+        <CloudProjectsModal 
+          onClose={() => setShowCloudModal(false)}
+          onRestore={(data) => {
+            setFiles(data.files || {});
+            setActiveFile(Object.keys(data.files || {})[0] || null);
+            setAppMode(data.workspace?.active_mode || 'Auto Detect');
+            setReloadChatTrigger(prev => prev + 1);
+            setLogs(prev => [...prev, "[SYSTEM] Workspace restored from cloud."]);
+          }}
+        />
+      )}
     </div>
   );
 }

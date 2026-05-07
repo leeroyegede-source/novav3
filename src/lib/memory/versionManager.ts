@@ -124,4 +124,8 @@ export class VersionManager {
   static clearHistory() {
     this.history = [];
   }
+
+  static restoreHistory(historyData: ProjectSnapshot[]) {
+    this.history = historyData;
+  }
 }
