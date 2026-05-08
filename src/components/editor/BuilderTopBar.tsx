@@ -58,7 +58,7 @@ export function BuilderTopBar({ onToggleRight, onToggleBottom, onOpenVersions, a
   const isFailed = isHydrated && memory ? !!memory.last_failed_version_id : false;
 
   return (
-    <div className="h-12 w-full min-w-0 max-w-full border-b border-slate-800 bg-slate-900/80 flex items-center justify-between px-2 md:px-4 select-none shrink-0 z-[100] relative">
+    <div className="h-12 w-full min-w-0 max-w-full border-b border-white/5 bg-white/[0.02] backdrop-blur-xl flex items-center justify-between px-2 md:px-4 select-none shrink-0 z-[100] relative">
       <div className="flex items-center gap-2 md:gap-4 min-w-0">
         <div className="flex items-center gap-2 shrink-0">
           <div className="w-6 h-6 rounded bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center shadow-lg shadow-indigo-500/20">

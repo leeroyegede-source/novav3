@@ -19,13 +19,13 @@ export function LogsPanel({ logs, onCommand, onSelfHeal }: LogsPanelProps) {
 
   return (
     <div className="flex-1 flex flex-col h-full relative">
-      <div className="p-2 border-b border-slate-800 flex items-center justify-between bg-slate-900 z-10">
+      <div className="p-2 border-b border-white/5 flex items-center justify-between bg-white/[0.02] backdrop-blur-md z-10">
         <div className="flex items-center gap-2">
           <Terminal className="w-4 h-4 text-slate-400" />
           <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Interactive Terminal</span>
         </div>
       </div>
-      <div className="flex-1 overflow-y-auto p-4 bg-black font-mono text-xs text-emerald-400 space-y-1 pb-12">
+      <div className="flex-1 overflow-y-auto p-4 bg-transparent font-mono text-xs text-emerald-400 space-y-1 pb-12">
         {logs.map((log, i) => {
           const isError = log.includes('[ERROR]') || log.includes('[BROWSER RUNTIME ERROR]') || log.toLowerCase().includes('error:') || log.includes('ERR!');
           return (
@@ -44,7 +44,7 @@ export function LogsPanel({ logs, onCommand, onSelfHeal }: LogsPanelProps) {
         })}
       </div>
       {onCommand && (
-        <div className="absolute bottom-0 left-0 w-full bg-slate-900 border-t border-slate-800 p-2 flex items-center gap-2">
+        <div className="absolute bottom-0 left-0 w-full bg-black/40 border-t border-white/5 p-2 flex items-center gap-2 backdrop-blur-md">
           <span className="text-emerald-500 font-mono text-sm">~</span>
           <input 
             type="text" 

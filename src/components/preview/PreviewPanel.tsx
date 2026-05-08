@@ -122,8 +122,8 @@ export function PreviewPanel({ files, appMode, onLogsUpdate }: { files: Record<s
   const isFrontendMode = false;
 
   return (
-    <div className="flex flex-col w-full h-full bg-slate-900 text-slate-300">
-      <div className="flex items-center justify-between px-4 py-2 bg-slate-800 border-b border-slate-700">
+    <div className="flex flex-col w-full h-full bg-transparent text-slate-300">
+      <div className="flex items-center justify-between px-4 py-2 bg-white/[0.02] border-b border-white/5 backdrop-blur-md">
         <div className="flex items-center gap-2">
           <span className={`w-2 h-2 rounded-full ${containerInfo ? 'bg-green-500' : 'bg-red-500'}`}></span>
           <span className="text-sm font-semibold">{appMode}</span>
@@ -160,21 +160,21 @@ export function PreviewPanel({ files, appMode, onLogsUpdate }: { files: Record<s
                   </button>
                 </>
               )}
-              <button onClick={() => setShowLogs(!showLogs)} title="Toggle Logs" className={`p-1.5 hover:bg-slate-700 rounded transition-colors ${showLogs ? 'text-indigo-400 bg-slate-700' : 'text-slate-300'}`}>
+              <button onClick={() => setShowLogs(!showLogs)} title="Toggle Logs" className={`p-1.5 hover:bg-white/10 rounded transition-colors ${showLogs ? 'text-indigo-400 bg-white/10' : 'text-slate-300'}`}>
                 <Terminal className="w-4 h-4" />
               </button>
-              <div className="w-px h-4 bg-slate-700 mx-1" />
-              <div className="flex items-center bg-slate-950 rounded border border-slate-700 overflow-hidden">
-                <button onClick={() => handleDeviceMode('full')} title="Full Screen" className={`p-1.5 transition-colors ${deviceMode === 'full' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'}`}>
+              <div className="w-px h-4 bg-white/10 mx-1" />
+              <div className="flex items-center bg-black/20 rounded border border-white/10 overflow-hidden">
+                <button onClick={() => handleDeviceMode('full')} title="Full Screen" className={`p-1.5 transition-colors ${deviceMode === 'full' ? 'bg-indigo-600/80 text-white' : 'text-slate-400 hover:text-slate-200 hover:bg-white/10'}`}>
                   <Maximize className="w-3.5 h-3.5" />
                 </button>
-                <button onClick={() => handleDeviceMode('desktop')} title="Desktop (1440px)" className={`p-1.5 transition-colors border-l border-slate-700 ${deviceMode === 'desktop' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'}`}>
+                <button onClick={() => handleDeviceMode('desktop')} title="Desktop (1440px)" className={`p-1.5 transition-colors border-l border-white/5 ${deviceMode === 'desktop' ? 'bg-indigo-600/80 text-white' : 'text-slate-400 hover:text-slate-200 hover:bg-white/10'}`}>
                   <Monitor className="w-3.5 h-3.5" />
                 </button>
-                <button onClick={() => handleDeviceMode('tablet')} title="Tablet (768px)" className={`p-1.5 transition-colors border-l border-slate-700 ${deviceMode === 'tablet' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'}`}>
+                <button onClick={() => handleDeviceMode('tablet')} title="Tablet (768px)" className={`p-1.5 transition-colors border-l border-white/5 ${deviceMode === 'tablet' ? 'bg-indigo-600/80 text-white' : 'text-slate-400 hover:text-slate-200 hover:bg-white/10'}`}>
                   <TabletIcon className="w-3.5 h-3.5" />
                 </button>
-                <button onClick={() => handleDeviceMode('mobile')} title="Mobile (390px)" className={`p-1.5 transition-colors border-l border-slate-700 ${deviceMode === 'mobile' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'}`}>
+                <button onClick={() => handleDeviceMode('mobile')} title="Mobile (390px)" className={`p-1.5 transition-colors border-l border-white/5 ${deviceMode === 'mobile' ? 'bg-indigo-600/80 text-white' : 'text-slate-400 hover:text-slate-200 hover:bg-white/10'}`}>
                   <Smartphone className="w-3.5 h-3.5" />
                 </button>
               </div>
@@ -183,7 +183,7 @@ export function PreviewPanel({ files, appMode, onLogsUpdate }: { files: Record<s
         </div>
       </div>
 
-      <div className="flex-1 relative flex flex-col min-h-0 bg-white">
+      <div className="flex-1 relative flex flex-col min-h-0 bg-transparent">
         {dockerError && (
           <div className="absolute top-4 left-4 right-4 p-4 bg-red-900/90 border border-red-500 text-red-200 rounded text-sm z-30 shadow-lg">
             <h4 className="font-bold mb-1">Docker Runner Error</h4>
@@ -217,7 +217,7 @@ export function PreviewPanel({ files, appMode, onLogsUpdate }: { files: Record<s
 
         {containerInfo ? (
           <div className="flex flex-col w-full h-full">
-            <div className="h-10 bg-slate-100 border-b border-slate-300 flex items-center px-3 gap-2 shrink-0">
+            <div className="h-10 bg-white/[0.03] backdrop-blur-md border-b border-white/5 flex items-center px-3 gap-2 shrink-0">
                <Globe className="w-4 h-4 text-slate-400" />
                <input 
                  type="text" 
@@ -234,13 +234,13 @@ export function PreviewPanel({ files, appMode, onLogsUpdate }: { files: Record<s
                        if (iframeRef.current) iframeRef.current.src = containerInfo.previewUrl + newPath;
                     }
                  }}
-                 className="flex-1 bg-white border border-slate-300 rounded px-2 py-1 text-xs text-slate-700 outline-none focus:border-indigo-500 font-mono"
+                 className="flex-1 bg-white/[0.05] border border-white/10 rounded px-2 py-1 text-xs text-slate-300 outline-none focus:border-indigo-500 font-mono transition-colors"
                />
-               <button onClick={handleRefresh} className="p-1 hover:bg-slate-200 rounded text-slate-600 transition-colors">
+               <button onClick={handleRefresh} className="p-1 hover:bg-white/10 rounded text-slate-400 transition-colors">
                   <RefreshCw className="w-3.5 h-3.5" />
                </button>
             </div>
-            <div className="flex-1 overflow-auto flex justify-center bg-slate-200">
+            <div className="flex-1 overflow-auto flex justify-center bg-transparent p-2 md:p-4">
               <div 
                 className={`transition-all duration-300 ease-in-out bg-white flex flex-col ${
                   deviceMode === 'full' ? 'w-full h-full' : 
@@ -274,7 +274,7 @@ export function PreviewPanel({ files, appMode, onLogsUpdate }: { files: Record<s
           </div>
         ) : (
           !booting && !error && (
-            <div className="absolute inset-0 flex flex-col items-center justify-center bg-slate-900 text-slate-500">
+            <div className="absolute inset-0 flex flex-col items-center justify-center bg-transparent text-slate-500">
               <Play className="w-12 h-12 mb-4 opacity-30" />
               <p>Click Start to run your project in a local container</p>
             </div>
