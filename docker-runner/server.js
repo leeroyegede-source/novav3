@@ -290,8 +290,8 @@ app.post("/run", async (req, res) => {
   }
 });
 
-app.listen(8080, () => {
+app.listen(3000, () => {
   console.log(
-    "Runner API running on http://localhost:8080"
+    "Runner API running on http://localhost:3000"
   );
 });
