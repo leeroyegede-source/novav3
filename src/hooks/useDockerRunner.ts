@@ -20,7 +20,9 @@ export function useDockerRunner() {
       const data = await res.json();
 
       if (!res.ok || !data.success) {
-        throw new Error(data.error || 'Failed to start Docker Runner');
+        const errorMsg = data.error || 'Failed to start Docker Runner';
+        const logsMsg = data.logs ? `\n\nLogs:\n${data.logs}` : '';
+        throw new Error(`${errorMsg}${logsMsg}`);
       }
 
       setDockerPreviewUrl(data.previewUrl);
@@ -31,13 +33,19 @@ export function useDockerRunner() {
     }
   };
 
-  const closeDockerPreview = () => setDockerPreviewUrl(null);
+  const closeDockerPreview = () => {
+    setDockerPreviewUrl(null);
+    setDockerError(null);
+  };
+
+  const clearDockerError = () => setDockerError(null);
 
   return {
     isDockerLoading,
     dockerPreviewUrl,
     dockerError,
     runInDocker,
-    closeDockerPreview
+    closeDockerPreview,
+    clearDockerError
   };
 }

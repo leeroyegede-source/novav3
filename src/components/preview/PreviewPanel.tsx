@@ -6,7 +6,7 @@ import { DockerPreviewPanel } from '@/components/preview/DockerPreviewPanel';
 
 export function PreviewPanel({ files, appMode, onLogsUpdate }: { files: Record<string, string>, appMode: string, onLogsUpdate?: (logs: string[]) => void }) {
   const [containerInfo, setContainerInfo] = useState<any>(null);
-  const { isDockerLoading, dockerPreviewUrl, dockerError, runInDocker, closeDockerPreview } = useDockerRunner();
+  const { isDockerLoading, dockerPreviewUrl, dockerError, runInDocker, closeDockerPreview, clearDockerError } = useDockerRunner();
   const [currentPath, setCurrentPath] = useState("/");
   const [urlInput, setUrlInput] = useState("");
   const [booting, setBooting] = useState(false);
@@ -112,6 +112,11 @@ export function PreviewPanel({ files, appMode, onLogsUpdate }: { files: Record<s
     };
   }, []);
 
+  // Do not reuse an old previewUrl after mode switch
+  useEffect(() => {
+    closeDockerPreview();
+  }, [appMode, files]);
+
   const handleRefresh = () => {
     if (iframeRef.current && containerInfo) {
       iframeRef.current.src = containerInfo.previewUrl + currentPath;
@@ -189,7 +194,7 @@ export function PreviewPanel({ files, appMode, onLogsUpdate }: { files: Record<s
             <h4 className="font-bold mb-1">Docker Runner Error</h4>
             <p className="whitespace-pre-wrap">{dockerError}</p>
             <button onClick={() => runInDocker(projectId, files)} className="mt-2 text-xs underline text-red-300 hover:text-white mr-4">Retry</button>
-            <button onClick={closeDockerPreview} className="mt-2 text-xs underline text-red-300 hover:text-white">Dismiss</button>
+            <button onClick={clearDockerError} className="mt-2 text-xs underline text-red-300 hover:text-white">Dismiss</button>
           </div>
         )}
 

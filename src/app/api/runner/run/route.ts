@@ -36,7 +36,8 @@ export async function POST(request: Request) {
       return NextResponse.json(
         { 
           success: false, 
-          error: errorData.message || `Docker Runner failed with status: ${response.status}` 
+          error: errorData.error || errorData.message || `Docker Runner failed with status: ${response.status}`,
+          logs: errorData.logs
         },
         { status: response.status }
       );

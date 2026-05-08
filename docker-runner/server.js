@@ -32,19 +32,24 @@ app.get("/favicon.ico", (req, res) => {
 });
 
 function killCurrentProcess() {
-  if (!currentProcess) return;
+  if (!currentProcess) return Promise.resolve();
 
-  try {
-    if (os.platform() === "win32") {
-      exec(`taskkill /pid ${currentProcess.pid} /t /f`);
-    } else {
-      process.kill(-currentProcess.pid);
+  return new Promise((resolve) => {
+    try {
+      if (os.platform() === "win32") {
+        exec(`taskkill /pid ${currentProcess.pid} /t /f`, () => resolve());
+      } else {
+        process.kill(-currentProcess.pid);
+        resolve();
+      }
+    } catch (error) {
+      console.error("Failed to kill existing process:", error);
+      resolve();
     }
-  } catch (error) {
-    console.error("Failed to kill existing process:", error);
-  }
-
-  currentProcess = null;
+  }).then(() => {
+    currentProcess = null;
+    return new Promise(res => setTimeout(res, 1000));
+  });
 }
 
 function normalizeFiles(files) {
@@ -72,7 +77,7 @@ function normalizeFiles(files) {
 
 function detectFramework(files) {
   let framework = "static";
-  let port = 3000;
+  let port = 4173;
   let startCommand = null;
 
   if (files["package.json"]) {
@@ -84,7 +89,7 @@ function detectFramework(files) {
         port = 3000;
         startCommand = [
           npmCmd,
-          ["run", "dev", "--", "--hostname", "0.0.0.0"],
+          ["run", "dev", "--", "--hostname", "0.0.0.0", "-p", String(port)],
         ];
       } else if (
         pkg.dependencies?.vite ||
@@ -94,19 +99,30 @@ function detectFramework(files) {
         port = 5173;
         startCommand = [
           npmCmd,
-          ["run", "dev", "--", "--host", "0.0.0.0"],
+          ["run", "dev", "--", "--host", "0.0.0.0", "--port", String(port)],
         ];
       } else {
         framework = "node";
-        port = 3000;
+        port = 3001;
         startCommand = [npmCmd, ["start"]];
       }
     } catch (error) {
       console.error("Failed to parse package.json:", error);
     }
+  } else if (files["artisan"] || files["composer.json"]) {
+    framework = "laravel";
+    port = 8001;
+    startCommand = [
+      "php",
+      ["artisan", "serve", "--host", "0.0.0.0", "--port", String(port)],
+    ];
+  } else if (files["index.php"]) {
+    framework = "php";
+    port = 8000;
+    startCommand = ["php", ["-S", "0.0.0.0:" + port]];
   } else if (files["index.html"]) {
     framework = "static";
-    port = 3000;
+    port = 4173;
     startCommand = [
       npxCmd,
       ["serve", ".", "-p", String(port)],
@@ -117,10 +133,16 @@ function detectFramework(files) {
 }
 
 function saveFiles(workspacePath, files) {
-  fs.rmSync(workspacePath, {
-    recursive: true,
-    force: true,
-  });
+  const rootWorkspace = path.dirname(workspacePath);
+  
+  try {
+    fs.rmSync(rootWorkspace, {
+      recursive: true,
+      force: true,
+    });
+  } catch (err) {
+    console.error("Failed to clear root workspace:", err);
+  }
 
   fs.mkdirSync(workspacePath, {
     recursive: true,
@@ -149,23 +171,25 @@ function runCommand(command, args, cwd) {
       shell: true,
     });
 
+    let logs = "";
+
     child.stdout.on("data", (data) => {
+      logs += data.toString();
       process.stdout.write(`[CMD] ${data.toString()}`);
     });
 
     child.stderr.on("data", (data) => {
+      logs += data.toString();
       process.stderr.write(`[CMD ERR] ${data.toString()}`);
     });
 
     child.on("close", (code) => {
       if (code === 0) {
-        resolve();
+        resolve(logs);
       } else {
-        reject(
-          new Error(
-            `${command} ${args.join(" ")} failed with code ${code}`
-          )
-        );
+        const error = new Error(`${command} ${args.join(" ")} failed with code ${code}`);
+        error.logs = logs;
+        reject(error);
       }
     });
   });
@@ -246,9 +270,15 @@ app.post("/run", async (req, res) => {
       });
     }
 
-    killCurrentProcess();
+    await killCurrentProcess();
 
-    if (framework !== "static") {
+    try {
+      await runCommand(npxCmd, ["kill-port", String(port)], os.tmpdir());
+    } catch (e) {
+      console.log(`Port ${port} might already be free or kill-port failed`);
+    }
+
+    if (framework !== "static" && framework !== "php" && framework !== "laravel") {
       console.log(
         `Installing dependencies for ${framework}...`
       );
@@ -286,6 +316,7 @@ app.post("/run", async (req, res) => {
     return res.status(500).json({
       success: false,
       error: String(error.message || error),
+      logs: error.logs || "No additional logs available.",
     });
   }
 });
