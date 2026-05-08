@@ -14,9 +14,11 @@ interface BuilderTopBarProps {
   onLoadProject: (projId: string) => void;
   onDeleteProject: (projId: string) => void;
   onClearRecent: () => void;
+  theme: string;
+  setTheme: (t: string) => void;
 }
 
-export function BuilderTopBar({ onToggleRight, onToggleBottom, onOpenVersions, appMode, setAppMode, userEmail, onLoadProject, onDeleteProject, onClearRecent }: BuilderTopBarProps) {
+export function BuilderTopBar({ onToggleRight, onToggleBottom, onOpenVersions, appMode, setAppMode, userEmail, onLoadProject, onDeleteProject, onClearRecent, theme, setTheme }: BuilderTopBarProps) {
   const [isHydrated, setIsHydrated] = useState(false);
   const [memory, setMemory] = useState<any>(null);
   const [recentOpen, setRecentOpen] = useState(false);
@@ -144,6 +146,16 @@ export function BuilderTopBar({ onToggleRight, onToggleBottom, onOpenVersions, a
                 <option key={m} value={m} className="bg-slate-900">{m}</option>
               ))}
           </select>
+          
+          <select 
+              value={theme} 
+              onChange={(e) => setTheme(e.target.value)}
+              className="bg-slate-800 hover:bg-slate-700 text-slate-200 text-[11px] font-bold border border-slate-700 rounded px-2 py-1 outline-none cursor-pointer transition-colors"
+          >
+              <option value="godlike" className="bg-slate-900">God-Tier Theme</option>
+              <option value="night" className="bg-slate-900">Night Mode</option>
+              <option value="day" className="bg-slate-900">Vibrant Mode</option>
+          </select>
         </div>
         
         <div className="md:hidden flex items-center ml-2">
@@ -214,11 +226,20 @@ export function BuilderTopBar({ onToggleRight, onToggleBottom, onOpenVersions, a
                 <select 
                     value={appMode} 
                     onChange={(e) => setAppMode(e.target.value)}
-                    className="w-full bg-slate-800 text-slate-200 text-[11px] font-bold border border-slate-700 rounded px-2 py-1 outline-none"
+                    className="w-full bg-slate-800 text-slate-200 text-[11px] font-bold border border-slate-700 rounded px-2 py-1 outline-none mb-2"
                 >
                     {["Auto Detect", "React / Vite", "Next.js", "Node / Express", "PHP", "Laravel", "Static Website", "API Only"].map(m => (
                       <option key={m} value={m} className="bg-slate-900">{m}</option>
                     ))}
+                </select>
+                <select 
+                    value={theme} 
+                    onChange={(e) => setTheme(e.target.value)}
+                    className="w-full bg-slate-800 text-slate-200 text-[11px] font-bold border border-slate-700 rounded px-2 py-1 outline-none"
+                >
+                    <option value="godlike" className="bg-slate-900">God-Tier Theme</option>
+                    <option value="night" className="bg-slate-900">Night Mode</option>
+                    <option value="day" className="bg-slate-900">Vibrant Mode</option>
                 </select>
               </div>
             </div>

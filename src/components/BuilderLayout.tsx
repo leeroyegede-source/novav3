@@ -54,6 +54,42 @@ export function BuilderLayout({ userEmail }: { userEmail?: string }) {
   const [newProjectMode, setNewProjectMode] = useState("Next.js");
   const [showCloudModal, setShowCloudModal] = useState(false);
   const [isCloudSaving, setIsCloudSaving] = useState(false);
+  const [theme, setTheme] = useState<'godlike' | 'night' | 'day'>('godlike');
+
+  const themeStyles = {
+    godlike: {
+      appBg: 'bg-[#0A0A10] text-slate-200',
+      panelBg: 'bg-[#0d1117]/80',
+      centerBg: 'bg-[#0d1117]/60',
+      border: 'border-white/10',
+      shadow: 'shadow-[0_8px_30px_rgb(0,0,0,0.5)]',
+      glow: true,
+      text: 'text-slate-200',
+      mobilePillBg: 'bg-white/5'
+    },
+    night: {
+      appBg: 'bg-slate-950 text-slate-300',
+      panelBg: 'bg-slate-900',
+      centerBg: 'bg-slate-900',
+      border: 'border-slate-800',
+      shadow: 'shadow-lg shadow-black/20',
+      glow: false,
+      text: 'text-slate-300',
+      mobilePillBg: 'bg-slate-900'
+    },
+    day: {
+      appBg: 'bg-[#09090b] text-white',
+      panelBg: 'bg-white/10',
+      centerBg: 'bg-white/[0.03]',
+      border: 'border-white/20',
+      shadow: 'shadow-[0_8px_40px_rgba(0,0,0,0.6)]',
+      glow: false,
+      text: 'text-white',
+      mobilePillBg: 'bg-white/15'
+    }
+  };
+
+  const currentTheme = themeStyles[theme];
 
   const handleSaveToCloud = async () => {
     setIsCloudSaving(true);
@@ -471,10 +507,10 @@ export function BuilderLayout({ userEmail }: { userEmail?: string }) {
       let loadedFiles = null;
       
       const savedMode = localStorage.getItem('nova_appMode');
-      const savedFilesStr = null;
+      const savedTheme = localStorage.getItem('nova_theme');
       
       if (savedMode) setAppMode(savedMode);
-      
+      if (savedTheme) setTheme(savedTheme as any);
       
       setIsHydrated(true);
     };
@@ -484,8 +520,9 @@ export function BuilderLayout({ userEmail }: { userEmail?: string }) {
   useEffect(() => {
     if (isHydrated) {
       localStorage.setItem('nova_appMode', appMode);
+      localStorage.setItem('nova_theme', theme);
     }
-  }, [appMode, isHydrated]);
+  }, [appMode, theme, isHydrated]);
 
   useEffect(() => {
     const handleMessage = (e: MessageEvent) => {
@@ -954,10 +991,25 @@ export function BuilderLayout({ userEmail }: { userEmail?: string }) {
   }
 
   return (
-    <div className="flex flex-col h-[100dvh] w-screen max-w-full bg-[#0A0A10] font-sans text-slate-200 overflow-hidden relative">
-      {/* Ambient Deep Space Glows */}
-      <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-indigo-600/10 blur-[120px] rounded-full pointer-events-none" />
-      <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-purple-600/10 blur-[120px] rounded-full pointer-events-none" />
+    <div className={`flex flex-col h-[100dvh] w-screen max-w-full font-sans antialiased tracking-tight overflow-hidden relative transition-colors duration-500 ${currentTheme.appBg}`}>
+      {/* Ambient Deep Space Glows (God-Tier) */}
+      {theme === 'godlike' && (
+        <>
+          <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-indigo-600/10 blur-[120px] rounded-full pointer-events-none z-0" />
+          <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-purple-600/10 blur-[120px] rounded-full pointer-events-none z-0" />
+        </>
+      )}
+
+      {/* iOS-Style Vibrant Mesh Gradient (Vibrant Mode) */}
+      {theme === 'day' && (
+        <div className="absolute inset-0 overflow-hidden pointer-events-none z-0 opacity-60">
+          <div className="absolute top-[-20%] left-[-10%] w-[50%] h-[50%] bg-rose-600/20 blur-[120px] rounded-full" />
+          <div className="absolute bottom-[-20%] right-[-10%] w-[60%] h-[60%] bg-blue-700/30 blur-[120px] rounded-full" />
+          <div className="absolute top-[20%] right-[-20%] w-[50%] h-[50%] bg-amber-600/15 blur-[120px] rounded-full" />
+          <div className="absolute bottom-[20%] left-[-20%] w-[40%] h-[40%] bg-purple-700/30 blur-[120px] rounded-full" />
+          <div className="absolute top-[40%] left-[30%] w-[30%] h-[30%] bg-cyan-600/15 blur-[100px] rounded-full" />
+        </div>
+      )}
 
       <BuilderTopBar 
         onToggleRight={() => {}} 
@@ -969,26 +1021,30 @@ export function BuilderLayout({ userEmail }: { userEmail?: string }) {
         onLoadProject={loadProject}
         onDeleteProject={deleteProject}
         onClearRecent={clearRecent}
+        theme={theme}
+        setTheme={(t) => setTheme(t as 'godlike' | 'night' | 'day')}
       />
       
-      <div className="flex flex-1 overflow-hidden relative min-h-0 min-w-0 w-full z-10">
+      <div className="flex flex-1 overflow-hidden relative min-h-0 min-w-0 w-full z-10 p-2 md:p-4 gap-2 md:gap-4">
         
-        <div className="flex-1 flex flex-col md:flex-row overflow-hidden relative pb-24 md:pb-0 min-h-0 min-w-0 w-full">
-          <div className={`absolute inset-0 md:relative w-full md:w-[320px] border-r border-white/5 flex-col z-20 shadow-2xl bg-white/[0.02] backdrop-blur-xl shrink-0 min-h-0 min-w-0 max-w-full transition-all duration-300 ${mobileTab === 'chat' ? 'flex' : 'hidden md:flex'}`}>
-            <ChatPanel 
-              files={files} 
-              setFiles={setFiles} 
-              setLogs={setLogs} 
-              clearChatTrigger={clearChatTrigger} 
-              reloadChatTrigger={reloadChatTrigger}
-              appMode={appMode}
-            />
-          </div>
+        {/* Left Column: Chat */}
+        <div className={`absolute inset-0 md:relative w-full md:w-[320px] lg:w-[380px] border ${currentTheme.border} rounded-2xl flex-col z-20 ${currentTheme.shadow} ${currentTheme.panelBg} backdrop-blur-2xl shrink-0 min-h-0 min-w-0 max-w-full transition-all duration-300 overflow-hidden ${mobileTab === 'chat' ? 'flex' : 'hidden md:flex'}`}>
+          <ChatPanel 
+            files={files} 
+            setFiles={setFiles} 
+            setLogs={setLogs} 
+            clearChatTrigger={clearChatTrigger} 
+            reloadChatTrigger={reloadChatTrigger}
+            appMode={appMode}
+          />
+        </div>
       
-      <div className={`absolute inset-0 md:relative flex-1 flex-col z-10 bg-transparent min-h-0 min-w-0 ${mobileTab === 'files' || mobileTab === 'editor' || mobileTab === 'tools' || mobileTab === 'terminal' ? 'flex' : 'hidden md:flex'}`}>
-        <div className="flex-1 flex flex-col md:flex-row min-h-0 min-w-0 w-full">
-          <div className={`absolute inset-0 md:relative w-full md:w-[320px] lg:w-[420px] border-r border-white/5 bg-white/[0.01] backdrop-blur-md flex-col z-20 shrink-0 min-h-0 min-w-0 max-w-full transition-all duration-300 ${mobileTab === 'files' ? 'flex' : 'hidden md:flex'}`}>
-            <div className="p-2 border-b border-white/5 flex flex-wrap gap-2 md:gap-3 items-center min-w-0 bg-white/[0.01]">
+        {/* Center Column: Files, Editor, Terminal */}
+        <div className={`absolute inset-0 md:relative flex-1 flex-col z-10 bg-transparent min-h-0 min-w-0 ${mobileTab === 'files' || mobileTab === 'editor' || mobileTab === 'tools' || mobileTab === 'terminal' ? 'flex' : 'hidden md:flex'}`}>
+          <div className={`flex-1 flex flex-col md:flex-row min-h-0 min-w-0 w-full border ${currentTheme.border} rounded-2xl ${currentTheme.shadow} ${currentTheme.centerBg} backdrop-blur-3xl overflow-hidden transition-colors duration-500`}>
+            {/* File Explorer Sidebar */}
+            <div className={`absolute inset-0 md:relative w-full md:w-[260px] lg:w-[300px] border-r ${currentTheme.border} bg-transparent flex-col z-20 shrink-0 min-h-0 min-w-0 max-w-full transition-all duration-300 ${mobileTab === 'files' ? 'flex' : 'hidden md:flex'}`}>
+            <div className={`p-2 border-b ${currentTheme.border} flex flex-wrap gap-2 md:gap-3 items-center min-w-0 bg-transparent`}>
               <span className="text-xs font-bold text-slate-400 uppercase tracking-wider hidden lg:block">EF</span>
               <select 
                 value={viewMode}
@@ -1115,7 +1171,7 @@ export function BuilderLayout({ userEmail }: { userEmail?: string }) {
                />
             ) : activeFile && files[activeFile] !== undefined ? (
               <>
-                <div className="h-8 border-b border-white/5 bg-white/[0.02] backdrop-blur-sm flex items-center justify-between px-4 text-xs font-mono text-slate-300">
+                <div className={`h-8 border-b ${currentTheme.border} bg-transparent backdrop-blur-sm flex items-center justify-between px-4 text-xs font-mono ${currentTheme.text}`}>
                   <span>{activeFile}</span>
                 </div>
                 <div className="flex-1 relative overflow-hidden">
@@ -1127,13 +1183,15 @@ export function BuilderLayout({ userEmail }: { userEmail?: string }) {
             )}
           </div>
         </div>
-        <div className={`absolute inset-0 md:relative md:h-[250px] border-t border-white/5 bg-[#0d1117]/80 backdrop-blur-xl flex-col z-30 shrink-0 min-h-0 min-w-0 max-w-full ${mobileTab === 'terminal' ? 'flex' : 'hidden md:flex'}`}>
+        {/* Terminal / Logs Panel */}
+        <div className={`absolute inset-0 md:relative md:h-[250px] border ${currentTheme.border} rounded-2xl ${currentTheme.shadow} ${currentTheme.panelBg} backdrop-blur-3xl flex-col z-30 shrink-0 min-h-0 min-w-0 max-w-full mt-2 md:mt-4 overflow-hidden transition-colors duration-500 ${mobileTab === 'terminal' ? 'flex' : 'hidden md:flex'}`}>
            <LogsPanel logs={logs} onCommand={handleTerminalCommand} onSelfHeal={handleSelfHeal} />
         </div>
       </div>
       
-      <div className={`absolute inset-0 md:relative w-full md:w-[45%] flex-col border-l border-white/5 bg-white/[0.01] backdrop-blur-md z-30 shadow-2xl shrink-0 min-h-0 min-w-0 max-w-full transition-transform duration-300 ${mobileTab === 'preview' ? 'flex translate-x-0' : 'hidden md:flex'}`}>
-        <div className="h-12 border-b border-white/5 flex items-center px-4 justify-between bg-white/[0.02] shrink-0 overflow-x-auto whitespace-nowrap">
+      {/* Right Column: Preview */}
+      <div className={`absolute inset-0 md:relative w-full md:w-[35%] lg:w-[45%] flex-col border ${currentTheme.border} rounded-2xl ${currentTheme.panelBg} backdrop-blur-3xl z-30 ${currentTheme.shadow} shrink-0 min-h-0 min-w-0 max-w-full transition-all duration-500 overflow-hidden ${mobileTab === 'preview' ? 'flex translate-x-0' : 'hidden md:flex'}`}>
+        <div className={`h-12 border-b ${currentTheme.border} flex items-center px-4 justify-between bg-transparent shrink-0 overflow-x-auto whitespace-nowrap`}>
            <div className="flex items-center gap-2 mr-4">
              <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse shrink-0" />
              <span className="text-sm font-bold tracking-tight">Live Preview</span>
@@ -1186,8 +1244,8 @@ export function BuilderLayout({ userEmail }: { userEmail?: string }) {
       </div>
       
       {/* Mobile Tab Bar - Premium Floating Pill */}
-      <div className="md:hidden absolute bottom-6 left-4 right-4 h-16 bg-white/5 backdrop-blur-2xl border border-white/10 rounded-2xl flex items-center justify-between px-2 z-[100] shadow-[0_10px_40px_rgba(0,0,0,0.5)]">
-        <button onClick={() => setMobileTab('chat')} className={`flex-1 flex flex-col items-center justify-center gap-1 transition-colors ${mobileTab === 'chat' ? 'text-indigo-400 drop-shadow-[0_0_8px_rgba(129,140,248,0.5)]' : 'text-slate-500 hover:text-slate-300'}`}>
+      <div className={`md:hidden absolute bottom-6 left-4 right-4 h-16 ${currentTheme.mobilePillBg} backdrop-blur-2xl border ${currentTheme.border} rounded-2xl flex items-center justify-between px-2 z-[100] ${currentTheme.shadow} transition-colors duration-500`}>
+        <button onClick={() => setMobileTab('chat')} className={`flex-1 flex flex-col items-center justify-center gap-1 transition-colors ${mobileTab === 'chat' ? 'text-indigo-500 drop-shadow-[0_0_8px_rgba(99,102,241,0.5)]' : 'text-slate-500'}`}>
           <MessageSquare className="w-5 h-5" />
           <span className="text-[10px] font-medium">Chat</span>
         </button>
@@ -1208,8 +1266,6 @@ export function BuilderLayout({ userEmail }: { userEmail?: string }) {
           <span className="text-[10px] font-medium">Preview</span>
         </button>
       </div>
-        
-        </div>
       </div>
 
       {showCloudModal && (
