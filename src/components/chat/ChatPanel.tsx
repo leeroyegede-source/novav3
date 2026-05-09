@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Send, StopCircle, Undo2, BrainCircuit, Image as ImageIcon, X, History, Trash2 } from 'lucide-react';
+import { Send, StopCircle, Undo2, BrainCircuit, Image as ImageIcon, X, History, Trash2, Database, Palette, Code, ShieldCheck } from 'lucide-react';
 import { VersionManager } from '@/lib/memory/versionManager';
 import { ProjectMemory } from '@/lib/memory/projectMemory';
 import { LocalDB, STORE_CHAT } from '@/lib/storage/indexedDB';
@@ -12,8 +12,18 @@ export function ChatPanel({ files, setFiles, setLogs, clearChatTrigger, reloadCh
   const [timelineIndex, setTimelineIndex] = useState(0);
   const [attachedImage, setAttachedImage] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const chatInputRef = useRef<HTMLInputElement>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
   const [isHydrated, setIsHydrated] = useState(false);
+
+  useEffect(() => {
+    const handleSetPrompt = (e: any) => {
+      setPrompt(prev => prev ? prev + ' ' + e.detail : e.detail);
+      setTimeout(() => chatInputRef.current?.focus(), 50);
+    };
+    window.addEventListener('nova-set-prompt', handleSetPrompt);
+    return () => window.removeEventListener('nova-set-prompt', handleSetPrompt);
+  }, []);
 
   useEffect(() => {
     const initStorage = async () => {
@@ -273,11 +283,16 @@ export function ChatPanel({ files, setFiles, setLogs, clearChatTrigger, reloadCh
         {messages.map((m: any, i) => (
           <div key={i} className={`p-3 rounded-xl text-sm backdrop-blur-md ${m.role === 'user' ? 'bg-indigo-600/20 text-indigo-100 ml-4 border border-indigo-500/30' : 'bg-white/[0.03] text-slate-300 mr-4 border border-white/5'}`}>
             {m.reasoning && (
-              <div className="mb-3 border border-white/5 rounded bg-black/20 overflow-hidden shadow-lg">
-                <div className="px-3 py-1.5 text-xs font-bold text-slate-400 flex items-center gap-2 bg-white/[0.02] border-b border-white/5">
-                  <BrainCircuit className="w-3.5 h-3.5 text-indigo-400" /> Agent Execution Plan
+              <div className="mb-3 border border-indigo-500/20 rounded-lg bg-black/40 backdrop-blur-md overflow-hidden shadow-[0_0_15px_rgba(99,102,241,0.1)] relative group">
+                <div className="absolute inset-0 bg-gradient-to-r from-indigo-500/5 to-purple-500/5 opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none" />
+                <div className="px-3 py-2 text-xs font-bold text-indigo-300 flex items-center gap-2 bg-indigo-950/30 border-b border-indigo-500/10">
+                  <BrainCircuit className="w-4 h-4 text-indigo-400 animate-pulse" />
+                  <span className="tracking-wider uppercase">Agent Execution Pipeline</span>
+                  <div className="ml-auto flex gap-1">
+                    <span className="w-1.5 h-1.5 rounded-full bg-indigo-500 animate-ping" />
+                  </div>
                 </div>
-                <div className="p-3 text-xs text-slate-300 bg-transparent whitespace-pre-wrap font-mono leading-relaxed">
+                <div className="p-3 text-xs text-indigo-100/70 bg-transparent whitespace-pre-wrap font-mono leading-relaxed relative z-10 border-l-2 border-indigo-500/30 ml-2 my-2">
                   {m.reasoning}
                 </div>
               </div>
@@ -324,13 +339,54 @@ export function ChatPanel({ files, setFiles, setLogs, clearChatTrigger, reloadCh
           </div>
         ))}
         {isGenerating && (
-          <div className="flex items-center justify-between p-3 rounded-xl border border-slate-700 bg-slate-800/30 mr-4">
-            <div className="text-xs text-slate-400 animate-pulse flex items-center gap-2">
-              <BrainCircuit className="w-4 h-4 text-indigo-400" /> {progressMsg}
+          <div className="relative p-4 rounded-xl border border-indigo-500/30 bg-black/40 backdrop-blur-xl mr-4 shadow-[0_0_30px_rgba(99,102,241,0.15)] overflow-hidden">
+            <div className="absolute top-0 left-0 h-0.5 w-full bg-slate-800">
+              <div className="h-full bg-gradient-to-r from-indigo-500 via-purple-500 to-cyan-500 animate-[pulse_2s_ease-in-out_infinite] w-full" />
             </div>
-            <button onClick={handleStop} className="text-rose-400 hover:text-rose-300 flex items-center gap-1 text-[10px] px-2 py-1 bg-rose-500/10 rounded transition-colors uppercase font-bold tracking-wider">
-              <StopCircle className="w-3 h-3" /> Stop
-            </button>
+            <div className="relative z-10 flex flex-col gap-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="relative">
+                    <BrainCircuit className="w-5 h-5 text-indigo-400 relative z-10" />
+                    <div className="absolute inset-0 bg-indigo-500 blur-md opacity-50 animate-pulse" />
+                  </div>
+                  <div className="flex flex-col">
+                    <span className="text-[10px] font-bold text-indigo-300 uppercase tracking-widest animate-pulse">
+                      Nova AI Orchestrator
+                    </span>
+                    <span className="text-xs font-medium text-slate-200 mt-0.5">
+                      Delegating Tasks...
+                    </span>
+                  </div>
+                </div>
+                <button onClick={handleStop} className="text-rose-400 hover:text-white flex items-center gap-1 text-[10px] px-3 py-1.5 bg-rose-500/10 hover:bg-rose-500/40 border border-rose-500/20 rounded-full transition-all uppercase font-bold tracking-wider shadow-[0_0_10px_rgba(244,63,94,0.2)]">
+                  <StopCircle className="w-3 h-3" /> Abort
+                </button>
+              </div>
+
+              {/* Agent Pipeline Graph */}
+              <div className="grid grid-cols-4 gap-2 pt-2 border-t border-indigo-500/10">
+                <div className={`flex flex-col items-center text-center gap-2 p-2 rounded-lg transition-all duration-500 ${progressMsg.includes('memory') || progressMsg.includes('snapshot') ? 'bg-indigo-500/20 border border-indigo-500/30 shadow-[0_0_15px_rgba(99,102,241,0.2)] scale-105' : 'bg-slate-900/50 border border-slate-800 opacity-50'}`}>
+                  <Database className={`w-4 h-4 ${progressMsg.includes('memory') || progressMsg.includes('snapshot') ? 'text-indigo-400 animate-pulse' : 'text-slate-500'}`} />
+                  <span className="text-[9px] font-bold uppercase tracking-wider text-slate-300">Architect</span>
+                </div>
+                <div className={`flex flex-col items-center text-center gap-2 p-2 rounded-lg transition-all duration-500 ${progressMsg.includes('Inspecting') ? 'bg-purple-500/20 border border-purple-500/30 shadow-[0_0_15px_rgba(168,85,247,0.2)] scale-105' : 'bg-slate-900/50 border border-slate-800 opacity-50'}`}>
+                  <Palette className={`w-4 h-4 ${progressMsg.includes('Inspecting') ? 'text-purple-400 animate-pulse' : 'text-slate-500'}`} />
+                  <span className="text-[9px] font-bold uppercase tracking-wider text-slate-300">Designer</span>
+                </div>
+                <div className={`flex flex-col items-center text-center gap-2 p-2 rounded-lg transition-all duration-500 ${progressMsg.includes('Applying') ? 'bg-cyan-500/20 border border-cyan-500/30 shadow-[0_0_15px_rgba(6,182,212,0.2)] scale-105' : 'bg-slate-900/50 border border-slate-800 opacity-50'}`}>
+                  <Code className={`w-4 h-4 ${progressMsg.includes('Applying') ? 'text-cyan-400 animate-pulse' : 'text-slate-500'}`} />
+                  <span className="text-[9px] font-bold uppercase tracking-wider text-slate-300">Developer</span>
+                </div>
+                <div className={`flex flex-col items-center text-center gap-2 p-2 rounded-lg transition-all duration-500 ${progressMsg.includes('Running') || progressMsg.includes('Validating') ? 'bg-emerald-500/20 border border-emerald-500/30 shadow-[0_0_15px_rgba(16,185,129,0.2)] scale-105' : 'bg-slate-900/50 border border-slate-800 opacity-50'}`}>
+                  <ShieldCheck className={`w-4 h-4 ${progressMsg.includes('Running') || progressMsg.includes('Validating') ? 'text-emerald-400 animate-pulse' : 'text-slate-500'}`} />
+                  <span className="text-[9px] font-bold uppercase tracking-wider text-slate-300">QA Tester</span>
+                </div>
+              </div>
+              <div className="text-[10px] text-center text-indigo-300/70 font-mono tracking-widest mt-1">
+                {progressMsg.toUpperCase()}
+              </div>
+            </div>
           </div>
         )}
       </div>
@@ -367,9 +423,10 @@ export function ChatPanel({ files, setFiles, setLogs, clearChatTrigger, reloadCh
           </button>
           <input 
             type="text" 
+            ref={chatInputRef}
             value={prompt} 
             onChange={(e) => setPrompt(e.target.value)} 
-            placeholder="Build me a... or attach an image"
+            placeholder="Build me a... or hold ALT + click an element to select it"
             className="w-full bg-white/[0.05] border border-white/10 rounded-lg pl-10 pr-10 py-3 text-sm focus:outline-none focus:border-indigo-500 transition-colors text-slate-200 placeholder:text-slate-500 backdrop-blur-md shadow-inner"
           />
           <button type="submit" disabled={isGenerating} className="absolute right-2 top-2.5 p-1 text-slate-400 hover:text-indigo-400 disabled:opacity-50">

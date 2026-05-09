@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { ProjectMemory } from '@/lib/memory/projectMemory';
 import { VersionManager } from '@/lib/memory/versionManager';
-import { Save, Play, CheckCircle2, AlertTriangle, Cloud, RotateCcw, LayoutPanelLeft, PanelBottom, Settings2, History, GitBranch, FastForward, MoreHorizontal, Trash2 } from 'lucide-react';
+import { Save, Play, CheckCircle2, AlertTriangle, Cloud, RotateCcw, LayoutPanelLeft, PanelBottom, Settings2, History, GitBranch, FastForward, MoreHorizontal, Trash2, DownloadCloud, Copy } from 'lucide-react';
 import { DebugPanel } from '@/components/editor/DebugPanel';
 
 interface BuilderTopBarProps {
@@ -25,6 +25,15 @@ export function BuilderTopBar({ onToggleRight, onToggleBottom, onOpenVersions, a
   const [recentProjects, setRecentProjects] = useState<any[]>([]);
   const [timeline, setTimeline] = useState({ max: 0, current: 0 });
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [copied, setCopied] = useState(false);
+
+  const handleCopyId = () => {
+    if (memory?.project_id) {
+      navigator.clipboard.writeText(memory.project_id);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    }
+  };
 
   useEffect(() => {
     const handleUpdate = (e: any) => setTimeline(e.detail);
@@ -167,6 +176,15 @@ export function BuilderTopBar({ onToggleRight, onToggleBottom, onOpenVersions, a
         <button onClick={onOpenVersions} className="hidden md:flex text-[10px] font-bold bg-slate-800 hover:bg-slate-700 text-slate-300 px-3 py-1.5 rounded items-center gap-1.5 transition-colors shrink-0">
           <GitBranch className="w-3 h-3" /> Versions
         </button>
+        {memory?.project_id && (
+          <button onClick={handleCopyId} className="hidden md:flex text-[10px] font-bold bg-slate-800 hover:bg-slate-700 text-slate-300 px-3 py-1.5 rounded items-center gap-1.5 transition-colors shrink-0">
+            {copied ? <CheckCircle2 className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
+            {copied ? 'Copied ID!' : 'Copy ID'}
+          </button>
+        )}
+        <a href="/api/sync/cli" download="nova-sync.js" className="hidden md:flex text-[10px] font-bold bg-indigo-600/20 hover:bg-indigo-600/40 border border-indigo-500/30 text-indigo-300 px-3 py-1.5 rounded items-center gap-1.5 transition-colors shrink-0 shadow-[0_0_10px_rgba(99,102,241,0.2)]">
+          <DownloadCloud className="w-3 h-3" /> Local Sync CLI
+        </a>
         {timeline.max > 0 && (
           <div className="hidden md:flex items-center gap-2 bg-slate-800 px-2 py-1 rounded h-7 border border-slate-700" title="Time-Travel Debugger">
             <History className="w-3 h-3 text-indigo-400" />

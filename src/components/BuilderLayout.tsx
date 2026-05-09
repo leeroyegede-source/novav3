@@ -58,34 +58,34 @@ export function BuilderLayout({ userEmail }: { userEmail?: string }) {
 
   const themeStyles = {
     godlike: {
-      appBg: 'bg-[#0A0A10] text-slate-200',
-      panelBg: 'bg-[#0d1117]/80',
-      centerBg: 'bg-[#0d1117]/60',
-      border: 'border-white/10',
-      shadow: 'shadow-[0_8px_30px_rgb(0,0,0,0.5)]',
+      appBg: 'bg-[#05050A] text-slate-200',
+      panelBg: 'bg-black/40 backdrop-blur-[32px] backdrop-saturate-150',
+      centerBg: 'bg-black/20 backdrop-blur-[24px] backdrop-saturate-150',
+      border: 'border border-white/5 border-t-white/10 shadow-inner',
+      shadow: 'shadow-[0_24px_50px_rgba(0,0,0,0.8)] ring-1 ring-white/5',
       glow: true,
       text: 'text-slate-200',
-      mobilePillBg: 'bg-white/5'
+      mobilePillBg: 'bg-black/60 backdrop-blur-[32px]'
     },
     night: {
       appBg: 'bg-slate-950 text-slate-300',
       panelBg: 'bg-slate-900',
-      centerBg: 'bg-slate-900',
-      border: 'border-slate-800',
-      shadow: 'shadow-lg shadow-black/20',
+      centerBg: 'bg-slate-900/80',
+      border: 'border border-slate-800',
+      shadow: 'shadow-2xl shadow-black/40',
       glow: false,
       text: 'text-slate-300',
       mobilePillBg: 'bg-slate-900'
     },
     day: {
       appBg: 'bg-[#09090b] text-white',
-      panelBg: 'bg-white/10',
-      centerBg: 'bg-white/[0.03]',
-      border: 'border-white/20',
+      panelBg: 'bg-black/20 backdrop-blur-[32px] backdrop-saturate-[200%]',
+      centerBg: 'bg-black/10 backdrop-blur-[24px] backdrop-saturate-[150%]',
+      border: 'border border-white/10 shadow-[inset_0_1px_1px_rgba(255,255,255,0.1)]',
       shadow: 'shadow-[0_8px_40px_rgba(0,0,0,0.6)]',
       glow: false,
       text: 'text-white',
-      mobilePillBg: 'bg-white/15'
+      mobilePillBg: 'bg-black/40 backdrop-blur-[32px]'
     }
   };
 
@@ -529,10 +529,36 @@ export function BuilderLayout({ userEmail }: { userEmail?: string }) {
       if (e.data && e.data.type === 'BROWSER_ERROR') {
         setLogs(prev => [...prev, `[BROWSER RUNTIME ERROR] ${e.data.payload}`]);
       }
+      if (e.data && e.data.type === 'NOVA_ELEMENT_CLICK') {
+        const el = e.data.payload;
+        const descriptor = el.id ? `#${el.id}` : el.className ? `.${el.className.split(' ').join('.')}` : el.tag;
+        const textHint = el.text ? ` containing "${el.text}"` : '';
+        const promptTarget = `Make changes to the <${el.tag}> element${descriptor ? ` (${descriptor})` : ''}${textHint}. `;
+        
+        window.dispatchEvent(new CustomEvent('nova-set-prompt', { detail: promptTarget }));
+        setMobileTab('chat');
+        setLogs(prev => [...prev, `[SYSTEM] Targeted element <${el.tag}> for AI editing.`]);
+      }
     };
     window.addEventListener('message', handleMessage);
     return () => window.removeEventListener('message', handleMessage);
   }, []);
+
+  useEffect(() => {
+    // Send files to the sync bridge for the local CLI
+    if (Object.keys(files).length > 0) {
+      try {
+        const mem = ProjectMemory.getMemory();
+        if (mem.project_id) {
+          fetch('/api/sync/bridge', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ projectId: mem.project_id, files })
+          }).catch(() => {});
+        }
+      } catch (e) {}
+    }
+  }, [files]);
 
   const handleModeChange = (newMode: string, currentFiles?: Record<string, string>) => {
     setAppMode(newMode);
@@ -994,10 +1020,11 @@ export function BuilderLayout({ userEmail }: { userEmail?: string }) {
     <div className={`flex flex-col h-[100dvh] w-screen max-w-full font-sans antialiased tracking-tight overflow-hidden relative transition-colors duration-500 ${currentTheme.appBg}`}>
       {/* Ambient Deep Space Glows (God-Tier) */}
       {theme === 'godlike' && (
-        <>
-          <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-indigo-600/10 blur-[120px] rounded-full pointer-events-none z-0" />
-          <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-purple-600/10 blur-[120px] rounded-full pointer-events-none z-0" />
-        </>
+        <div className="absolute inset-0 overflow-hidden pointer-events-none z-0 opacity-80">
+          <div className="absolute top-[-20%] left-[-10%] w-[50vw] h-[50vw] bg-indigo-600/20 blur-[140px] rounded-full mix-blend-screen animate-pulse duration-[10000ms]" />
+          <div className="absolute bottom-[-20%] right-[-10%] w-[50vw] h-[50vw] bg-fuchsia-600/20 blur-[140px] rounded-full mix-blend-screen animate-pulse duration-[12000ms]" />
+          <div className="absolute top-[20%] right-[10%] w-[30vw] h-[30vw] bg-cyan-500/10 blur-[100px] rounded-full mix-blend-screen animate-pulse duration-[8000ms]" />
+        </div>
       )}
 
       {/* iOS-Style Vibrant Mesh Gradient (Vibrant Mode) */}
