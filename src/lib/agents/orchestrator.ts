@@ -44,6 +44,8 @@ export interface AgentRequest {
   routingInfo?: RoutingInfo;
   prompt: string;
   context: AgentContext;
+  aiModel?: string;
+  apiKey?: string;
 }
 
 export interface StructuredChatResponse {
@@ -146,11 +148,13 @@ Return strictly JSON matching this structure:
 }
 
 export async function routeToAgent(request: AgentRequest): Promise<AgentResponse> {
-  console.log(`Routing request to ${request.role} agent...`);
+  console.log(`Routing request to ${request.role} agent using model: ${request.aiModel || 'default'}...`);
 
-  const apiKey = process.env.ANTHROPIC_API_KEY;
+  const aiModel = request.aiModel || 'default';
+  const customApiKey = request.apiKey || '';
+  const defaultApiKey = process.env.ANTHROPIC_API_KEY;
 
-  if (!apiKey) {
+  if (aiModel === 'default' && !defaultApiKey) {
     return {
       role: request.role,
       message: "Claude provider is not configured. Add ANTHROPIC_API_KEY or switch provider.",
@@ -268,19 +272,70 @@ ${JSON.stringify(request.context.omittedFiles || [], null, 2)}
   anthropicMessages.push({ role: "user", content: userContent });
 
   try {
-    const msg = await anthropic.messages.create({
-      model: "claude-opus-4-7",
-      max_tokens: 8192,
-      system: systemPrompt,
-      messages: anthropicMessages
-    });
+    let content = '';
 
-    const content = msg.content[0].type === 'text' ? msg.content[0].text : '{}';
+    if (aiModel === 'openai') {
+      const openAiMessages = [
+        { role: "system", content: systemPrompt },
+        ...anthropicMessages.map(m => {
+          const text = Array.isArray(m.content) ? m.content.find((p: any) => p.type === 'text')?.text || '' : m.content;
+          return { role: m.role, content: text };
+        })
+      ];
+      
+      const res = await fetch('https://api.openai.com/v1/chat/completions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${customApiKey}` },
+        body: JSON.stringify({
+          model: 'GPT-5-Codex',
+          messages: openAiMessages,
+          response_format: { type: "json_object" }
+        })
+      });
+      if (!res.ok) throw new Error("OpenAI API Error: " + await res.text());
+      const data = await res.json();
+      content = data.choices[0].message.content;
+
+    } else if (aiModel.includes('gemini')) {
+      const activeGeminiKey = customApiKey || process.env.GEMINI_API_KEY;
+      if (!activeGeminiKey) throw new Error("Missing Gemini API Key. Please add it in Settings or your .env file.");
+
+      const modelName = aiModel === 'gemini-free' ? 'gemini-2.5-flash' : 'Gemini-3-Pro';
+      const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${activeGeminiKey}`;
+      
+      const contents = anthropicMessages.map(m => {
+        const text = Array.isArray(m.content) ? m.content.find((p: any) => p.type === 'text')?.text || '' : m.content;
+        return { role: m.role === 'assistant' ? 'model' : 'user', parts: [{ text }] };
+      });
+
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          system_instruction: { parts: [{ text: systemPrompt }] },
+          contents,
+          generationConfig: { response_mime_type: "application/json" }
+        })
+      });
+      if (!res.ok) throw new Error("Gemini API Error: " + await res.text());
+      const data = await res.json();
+      content = data.candidates[0].content.parts[0].text;
+
+    } else {
+      const msg = await anthropic.messages.create({
+        model: "claude-opus-4-7",
+        max_tokens: 8192,
+        system: systemPrompt,
+        messages: anthropicMessages
+      });
+      content = msg.content[0].type === 'text' ? msg.content[0].text : '{}';
+    }
+
     let parsed;
     try {
       parsed = JSON.parse(content);
     } catch (e) {
-      throw new Error("The agent generated too much code and hit the maximum output limit. Please ask it to build the app in smaller, incremental steps.");
+      throw new Error("The agent generated invalid JSON or hit the output limit.");
     }
 
     // --- STEP 1: SELF-HEALING QA PIPELINE (AGENT DEBATE) ---

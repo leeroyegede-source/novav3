@@ -176,9 +176,11 @@ export function ChatPanel({ files, setFiles, setLogs, clearChatTrigger, reloadCh
          setLogs(prev => [...prev, `[SYSTEM] Wiping demo boilerplate for clean generation...`]);
       }
 
-      // Prepare conversational history and memory to pass to the agent
       const conversationHistory = messages.map(m => ({ role: m.role, content: m.content }));
       const memoryState = ProjectMemory.getMemory();
+      
+      const aiModel = localStorage.getItem('nova_ai_model') || 'default';
+      const apiKey = aiModel !== 'default' ? (localStorage.getItem(`nova_api_key_${aiModel}`) || '') : '';
       
       const res = await fetch('/api/ai/generate', {
         method: 'POST',
@@ -189,7 +191,9 @@ export function ChatPanel({ files, setFiles, setLogs, clearChatTrigger, reloadCh
           imageBase64: currentImage,
           history: conversationHistory,
           appMode: appMode,
-          memory: memoryState
+          memory: memoryState,
+          aiModel,
+          apiKey
         }),
         signal: abortControllerRef.current.signal
       });

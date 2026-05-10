@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { ShieldAlert, Key, Eye, EyeOff, RefreshCw, CheckCircle2 } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { ShieldAlert, Key, Eye, EyeOff, RefreshCw, CheckCircle2, Zap, Settings2 } from 'lucide-react';
 import { VersionManager } from '@/lib/memory/versionManager';
 
 interface EnvironmentPanelProps {
@@ -10,7 +10,28 @@ interface EnvironmentPanelProps {
 
 export function EnvironmentPanel({ files, onFilesUpdate, onLog }: EnvironmentPanelProps) {
   const [showValues, setShowValues] = useState(false);
+  const [aiModel, setAiModel] = useState('default');
+  const [apiKey, setApiKey] = useState('');
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      setAiModel(localStorage.getItem('nova_ai_model') || 'default');
+      setApiKey(localStorage.getItem('nova_api_key') || '');
+    }
+  }, []);
+
+  const handleModelChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const val = e.target.value;
+    setAiModel(val);
+    localStorage.setItem('nova_ai_model', val);
+  };
   
+  const handleKeyChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const val = e.target.value;
+    setApiKey(val);
+    localStorage.setItem('nova_api_key', val);
+  };
+
   const envContent = files['/.env'] || files['/.env.local'] || files['/.env.example'] || '';
   const hasEnv = !!envContent;
 
@@ -42,6 +63,51 @@ export function EnvironmentPanel({ files, onFilesUpdate, onLog }: EnvironmentPan
       </div>
 
       <div className="flex-1 overflow-y-auto p-4 space-y-4">
+        {/* AI Model Switcher Section */}
+        <div className="space-y-3 mb-6 border-b border-slate-800 pb-4">
+           <div className="flex items-center gap-2 mb-2">
+             <Zap className="w-4 h-4 text-indigo-400" />
+             <span className="text-[10px] font-bold uppercase text-slate-400">AI Engine Settings</span>
+           </div>
+           
+           <div className="flex flex-col gap-1">
+             <label className="text-[10px] font-bold text-slate-500">Select Provider</label>
+             <select 
+                value={aiModel} 
+                onChange={handleModelChange}
+                className="bg-slate-900 border border-slate-700 text-slate-300 text-xs rounded p-2 outline-none hover:border-indigo-500/50 transition-colors"
+             >
+                <option value="default">Default (Claude-Opus-4-7)</option>
+                <option value="openai">OpenAI (GPT-5-Codex)</option>
+                <option value="gemini-pro">Gemini Premium (Gemini-3-Pro)</option>
+                <option value="gemini-free">Gemini Free (gemini-2.5-flash)</option>
+             </select>
+           </div>
+           
+           {aiModel !== 'default' && (
+             <div className="flex flex-col gap-1 mt-2">
+               <label className="text-[10px] font-bold text-slate-500">Custom API Key</label>
+               <input 
+                  type="password"
+                  value={apiKey}
+                  onChange={handleKeyChange}
+                  placeholder="Paste your API key here..."
+                  className="bg-slate-900 border border-slate-700 text-slate-300 text-xs rounded p-2 outline-none focus:border-indigo-500 transition-colors"
+               />
+               {aiModel === 'gemini-free' && (
+                 <span className="text-[9px] text-amber-500/80 mt-1 leading-tight">
+                   Warning: Gemini Free Tier has a strict limit of 15 RPM. You must use your own free key from Google AI Studio to prevent global rate-limits.
+                 </span>
+               )}
+             </div>
+           )}
+        </div>
+
+        {/* Environment Variables Section */}
+        <div className="flex items-center gap-2 mb-2">
+             <Settings2 className="w-4 h-4 text-slate-500" />
+             <span className="text-[10px] font-bold uppercase text-slate-400">Environment Variables</span>
+        </div>
         {!hasEnv ? (
           <div className="flex flex-col items-center justify-center h-full text-slate-500 space-y-3 opacity-60">
             <ShieldAlert className="w-8 h-8" />

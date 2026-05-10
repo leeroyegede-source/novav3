@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { ProjectMemory } from '@/lib/memory/projectMemory';
 import { VersionManager } from '@/lib/memory/versionManager';
-import { Save, Play, CheckCircle2, AlertTriangle, Cloud, RotateCcw, LayoutPanelLeft, PanelBottom, Settings2, History, GitBranch, FastForward, MoreHorizontal, Trash2, DownloadCloud, Copy } from 'lucide-react';
+import { Save, Play, CheckCircle2, AlertTriangle, Cloud, RotateCcw, LayoutPanelLeft, PanelBottom, Settings2, History, GitBranch, FastForward, MoreHorizontal, Trash2, DownloadCloud, Copy, X, Loader2, ShieldCheck } from 'lucide-react';
 import { DebugPanel } from '@/components/editor/DebugPanel';
 
 interface BuilderTopBarProps {
@@ -26,6 +26,77 @@ export function BuilderTopBar({ onToggleRight, onToggleBottom, onOpenVersions, a
   const [timeline, setTimeline] = useState({ max: 0, current: 0 });
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [aiModel, setAiModel] = useState('default');
+  const [showKeyPopover, setShowKeyPopover] = useState(false);
+  const [tempKey, setTempKey] = useState('');
+  const [keyStatus, setKeyStatus] = useState<'idle' | 'verifying' | 'verified' | 'error'>('idle');
+  const [pendingModel, setPendingModel] = useState('');
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const savedModel = localStorage.getItem('nova_ai_model') || 'default';
+      setAiModel(savedModel);
+      if (savedModel !== 'default') {
+         const storedKey = localStorage.getItem(`nova_api_key_${savedModel}`) || '';
+         setKeyStatus(storedKey ? 'verified' : 'idle');
+      }
+    }
+  }, []);
+
+  const handleModelChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const val = e.target.value;
+    if (val === 'default') {
+      setAiModel(val);
+      localStorage.setItem('nova_ai_model', val);
+      setShowKeyPopover(false);
+      setPendingModel('');
+    } else {
+      setPendingModel(val);
+      const storedKey = localStorage.getItem(`nova_api_key_${val}`) || '';
+      setTempKey(storedKey);
+      setKeyStatus('idle');
+      setShowKeyPopover(true);
+    }
+  };
+
+  const handleVerifyKey = async () => {
+    if (!tempKey.trim() || !pendingModel) return;
+    setKeyStatus('verifying');
+    
+    try {
+      let isValid = false;
+      if (pendingModel === 'openai') {
+        const res = await fetch('https://api.openai.com/v1/models', {
+          headers: { Authorization: `Bearer ${tempKey}` }
+        });
+        isValid = res.ok;
+      } else if (pendingModel.includes('gemini')) {
+        const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${tempKey}`);
+        isValid = res.ok;
+      }
+
+      if (isValid) {
+        localStorage.setItem(`nova_api_key_${pendingModel}`, tempKey);
+        localStorage.setItem('nova_ai_model', pendingModel);
+        setAiModel(pendingModel);
+        setKeyStatus('verified');
+        setTimeout(() => {
+          setShowKeyPopover(false);
+          setPendingModel('');
+        }, 1500);
+      } else {
+        setKeyStatus('error');
+      }
+    } catch (e) {
+      setKeyStatus('error');
+    }
+  };
+
+  const closePopover = () => {
+    setShowKeyPopover(false);
+    setPendingModel('');
+    setKeyStatus(aiModel !== 'default' ? 'verified' : 'idle');
+  };
 
   const handleCopyId = () => {
     if (memory?.project_id) {
@@ -173,6 +244,45 @@ export function BuilderTopBar({ onToggleRight, onToggleBottom, onOpenVersions, a
       </div>
 
       <div className="flex items-center gap-2 shrink-0 ml-auto pl-2">
+        <div className="relative">
+          <select 
+              value={pendingModel || aiModel} 
+              onChange={handleModelChange}
+              className={`hidden md:flex text-[10px] font-bold px-2 py-1.5 rounded outline-none cursor-pointer transition-colors shrink-0 shadow-[0_0_10px_rgba(99,102,241,0.1)] ${aiModel !== 'default' && !pendingModel ? 'bg-emerald-900/30 hover:bg-emerald-900/50 border border-emerald-500/30 text-emerald-200' : 'bg-indigo-900/30 hover:bg-indigo-900/50 border border-indigo-500/30 text-indigo-200'}`}
+          >
+              <option value="default" className="bg-slate-900 text-slate-200">🤖 Claude (Default)</option>
+              <option value="openai" className="bg-slate-900 text-slate-200">🧠 GPT-4o</option>
+              <option value="gemini-pro" className="bg-slate-900 text-slate-200">💎 Gemini Pro</option>
+              <option value="gemini-free" className="bg-slate-900 text-slate-200">⚡ Gemini Free</option>
+          </select>
+          
+          {showKeyPopover && (
+             <div className="absolute top-full right-0 mt-2 w-64 bg-slate-900 border border-slate-700 rounded-lg shadow-2xl p-3 z-50 animate-in fade-in slide-in-from-top-2">
+                <div className="flex justify-between items-center mb-2">
+                   <span className="text-[10px] font-bold text-slate-300 flex items-center gap-1"><ShieldCheck className="w-3 h-3 text-indigo-400" /> Bring Your Own Key</span>
+                   <button onClick={closePopover} className="text-slate-500 hover:text-slate-300"><X className="w-3 h-3" /></button>
+                </div>
+                <input 
+                   type="password"
+                   value={tempKey}
+                   onChange={(e) => {
+                     setTempKey(e.target.value);
+                     setKeyStatus('idle');
+                   }}
+                   placeholder={`Enter ${pendingModel || aiModel} API Key...`}
+                   className={`w-full bg-slate-950 border ${keyStatus === 'error' ? 'border-red-500/50 text-red-300' : 'border-slate-800 text-slate-300'} text-[10px] p-1.5 rounded outline-none focus:border-indigo-500 transition-colors mb-2`}
+                />
+                <button 
+                   onClick={handleVerifyKey}
+                   disabled={!tempKey || keyStatus === 'verifying'}
+                   className={`w-full flex items-center justify-center gap-1 text-[10px] font-bold py-1.5 rounded transition-colors ${keyStatus === 'verified' ? 'bg-emerald-600 text-white' : keyStatus === 'error' ? 'bg-red-600 hover:bg-red-500 text-white' : 'bg-indigo-600 hover:bg-indigo-500 text-white disabled:opacity-50'}`}
+                >
+                   {keyStatus === 'verifying' ? <Loader2 className="w-3 h-3 animate-spin" /> : keyStatus === 'verified' ? <CheckCircle2 className="w-3 h-3" /> : keyStatus === 'error' ? <AlertTriangle className="w-3 h-3" /> : null}
+                   {keyStatus === 'verifying' ? 'Verifying...' : keyStatus === 'verified' ? 'Active & Verified' : keyStatus === 'error' ? 'Invalid Key - Retry' : 'Verify & Save Key'}
+                </button>
+             </div>
+          )}
+        </div>
         <button onClick={onOpenVersions} className="hidden md:flex text-[10px] font-bold bg-slate-800 hover:bg-slate-700 text-slate-300 px-3 py-1.5 rounded items-center gap-1.5 transition-colors shrink-0">
           <GitBranch className="w-3 h-3" /> Versions
         </button>

@@ -47,6 +47,8 @@ export async function POST(req: Request) {
     const appMode = body.appMode || "Auto Detect";
     const memory = body.memory || {};
     const isAutoHeal = body.isAutoHeal || false;
+    const aiModel = body.aiModel || "default";
+    const apiKey = body.apiKey || "";
 
     // Structured Routing Step
     const routingInfo = await determineRoute(prompt, isAutoHeal);
@@ -64,7 +66,9 @@ export async function POST(req: Request) {
         imageBase64,
         history,
         appMode
-      }
+      },
+      aiModel,
+      apiKey
     });
     
     let generatedFiles = { ...safeFiles };

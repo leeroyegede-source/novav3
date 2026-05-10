@@ -1,6 +1,7 @@
 "use client";
 import React, { useState, useEffect, useRef } from 'react';
 import { ChatPanel } from '@/components/chat/ChatPanel';
+import { NovaGuide } from '@/components/chat/NovaGuide';
 import { FileExplorer } from '@/components/editor/FileExplorer';
 import { CodeEditor } from '@/components/editor/CodeEditor';
 import { ArchitectureCanvas } from '@/components/editor/ArchitectureCanvas';
@@ -589,10 +590,13 @@ export function BuilderLayout({ userEmail }: { userEmail?: string }) {
   const executeAgentPrompt = async (prompt: string, currentFilesState: Record<string, string>, isCanvas: boolean = false, isAutoHeal: boolean = false) => {
     setLogs(prev => [...prev, isCanvas ? `[CANVAS] Link detected! Booting Integration Agent...` : `[SYSTEM] Booting AI Agent to process request...`]);
     try {
+      const aiModel = localStorage.getItem('nova_ai_model') || 'default';
+      const apiKey = aiModel !== 'default' ? (localStorage.getItem(`nova_api_key_${aiModel}`) || '') : '';
+
       const res = await fetch('/api/ai/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt, currentFiles: currentFilesState, isAutoHeal })
+        body: JSON.stringify({ prompt, currentFiles: currentFilesState, isAutoHeal, aiModel, apiKey })
       });
       const data = await res.json();
       if (data.files) {
@@ -1307,6 +1311,9 @@ export function BuilderLayout({ userEmail }: { userEmail?: string }) {
           }}
         />
       )}
+
+      {/* Floating Nova Guide Assistant */}
+      <NovaGuide />
     </div>
   );
 }
