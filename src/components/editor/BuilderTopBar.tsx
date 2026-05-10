@@ -3,8 +3,8 @@ import { ProjectMemory } from '@/lib/memory/projectMemory';
 import { VersionManager } from '@/lib/memory/versionManager';
 import { Save, Play, CheckCircle2, AlertTriangle, Cloud, RotateCcw, LayoutPanelLeft, PanelBottom, Settings2, History, GitBranch, FastForward, MoreHorizontal, Trash2, DownloadCloud, Copy, X, Loader2, ShieldCheck } from 'lucide-react';
 import { DebugPanel } from '@/components/editor/DebugPanel';
-
 interface BuilderTopBarProps {
+  onToggleLeft: () => void;
   onToggleRight: () => void;
   onToggleBottom: () => void;
   onOpenVersions: () => void;
@@ -18,7 +18,7 @@ interface BuilderTopBarProps {
   setTheme: (t: string) => void;
 }
 
-export function BuilderTopBar({ onToggleRight, onToggleBottom, onOpenVersions, appMode, setAppMode, userEmail, onLoadProject, onDeleteProject, onClearRecent, theme, setTheme }: BuilderTopBarProps) {
+export function BuilderTopBar({ onToggleLeft, onToggleRight, onToggleBottom, onOpenVersions, appMode, setAppMode, userEmail, onLoadProject, onDeleteProject, onClearRecent, theme, setTheme }: BuilderTopBarProps) {
   const [isHydrated, setIsHydrated] = useState(false);
   const [memory, setMemory] = useState<any>(null);
   const [recentOpen, setRecentOpen] = useState(false);
@@ -316,6 +316,9 @@ export function BuilderTopBar({ onToggleRight, onToggleBottom, onOpenVersions, a
         
         <div className="hidden md:block h-4 w-px bg-slate-800 mx-2" />
         
+        <button onClick={onToggleLeft} className="hidden md:block p-1.5 text-slate-500 hover:text-slate-300 hover:bg-slate-800 rounded transition-colors" title="Toggle Left Panel">
+          <LayoutPanelLeft className="w-4 h-4" />
+        </button>
         <button onClick={onToggleBottom} className="hidden md:block p-1.5 text-slate-500 hover:text-slate-300 hover:bg-slate-800 rounded transition-colors" title="Toggle Bottom Panel">
           <PanelBottom className="w-4 h-4" />
         </button>

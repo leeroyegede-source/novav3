@@ -56,6 +56,9 @@ export function BuilderLayout({ userEmail }: { userEmail?: string }) {
   const [showCloudModal, setShowCloudModal] = useState(false);
   const [isCloudSaving, setIsCloudSaving] = useState(false);
   const [theme, setTheme] = useState<'godlike' | 'night' | 'day'>('godlike');
+  const [showLeftPanel, setShowLeftPanel] = useState(true);
+  const [showRightPanel, setShowRightPanel] = useState(true);
+  const [showBottomPanel, setShowBottomPanel] = useState(true);
 
   const themeStyles = {
     godlike: {
@@ -1043,8 +1046,9 @@ export function BuilderLayout({ userEmail }: { userEmail?: string }) {
       )}
 
       <BuilderTopBar 
-        onToggleRight={() => {}} 
-        onToggleBottom={() => {}} 
+        onToggleLeft={() => setShowLeftPanel(!showLeftPanel)} 
+        onToggleRight={() => setShowRightPanel(!showRightPanel)} 
+        onToggleBottom={() => setShowBottomPanel(!showBottomPanel)} 
         onOpenVersions={() => setViewMode('versions')}
         appMode={appMode}
         setAppMode={handleModeChange}
@@ -1059,7 +1063,7 @@ export function BuilderLayout({ userEmail }: { userEmail?: string }) {
       <div className="flex flex-1 overflow-hidden relative min-h-0 min-w-0 w-full z-10 p-2 md:p-4 gap-2 md:gap-4">
         
         {/* Left Column: Chat */}
-        <div className={`absolute inset-0 md:relative w-full md:w-[320px] lg:w-[380px] border ${currentTheme.border} rounded-2xl flex-col z-20 ${currentTheme.shadow} ${currentTheme.panelBg} backdrop-blur-2xl shrink-0 min-h-0 min-w-0 max-w-full transition-all duration-300 overflow-hidden ${mobileTab === 'chat' ? 'flex' : 'hidden md:flex'}`}>
+        <div className={`absolute inset-0 md:relative w-full md:w-[320px] lg:w-[380px] border ${currentTheme.border} rounded-2xl flex-col z-20 ${currentTheme.shadow} ${currentTheme.panelBg} backdrop-blur-2xl shrink-0 min-h-0 min-w-0 max-w-full transition-all duration-300 overflow-hidden ${mobileTab === 'chat' ? 'flex' : (showLeftPanel ? 'hidden md:flex' : 'hidden')}`}>
           <ChatPanel 
             files={files} 
             setFiles={setFiles} 
@@ -1072,11 +1076,10 @@ export function BuilderLayout({ userEmail }: { userEmail?: string }) {
       
         {/* Center Column: Files, Editor, Terminal */}
         <div className={`absolute inset-0 md:relative flex-1 flex-col z-10 bg-transparent min-h-0 min-w-0 ${mobileTab === 'files' || mobileTab === 'editor' || mobileTab === 'tools' || mobileTab === 'terminal' ? 'flex' : 'hidden md:flex'}`}>
-          <div className={`flex-1 flex flex-col md:flex-row min-h-0 min-w-0 w-full border ${currentTheme.border} rounded-2xl ${currentTheme.shadow} ${currentTheme.centerBg} backdrop-blur-3xl overflow-hidden transition-colors duration-500`}>
-            {/* File Explorer Sidebar */}
-            <div className={`absolute inset-0 md:relative w-full md:w-[260px] lg:w-[300px] border-r ${currentTheme.border} bg-transparent flex-col z-20 shrink-0 min-h-0 min-w-0 max-w-full transition-all duration-300 ${mobileTab === 'files' ? 'flex' : 'hidden md:flex'}`}>
-            <div className={`p-2 border-b ${currentTheme.border} flex flex-wrap gap-2 md:gap-3 items-center min-w-0 bg-transparent`}>
-              <span className="text-xs font-bold text-slate-400 uppercase tracking-wider hidden lg:block">EF</span>
+          <div className={`flex-1 flex flex-col min-h-0 min-w-0 w-full border ${currentTheme.border} rounded-2xl ${currentTheme.shadow} ${currentTheme.centerBg} backdrop-blur-3xl overflow-hidden transition-colors duration-500 relative`}>
+            {/* Unified Toolbar for Center Column */}
+            <div className={`p-2 border-b ${currentTheme.border} flex overflow-x-auto whitespace-nowrap gap-2 md:gap-3 items-center min-w-0 bg-transparent z-30 relative shrink-0`}>
+              <span className="text-xs font-bold text-slate-400 uppercase tracking-wider hidden lg:block shrink-0">EF</span>
               <select 
                 value={viewMode}
                 onChange={(e) => setViewMode(e.target.value as any)}
@@ -1098,7 +1101,7 @@ export function BuilderLayout({ userEmail }: { userEmail?: string }) {
               >
                 Errors {errorCount > 0 && `(${errorCount})`}
               </button>
-              <div className="flex items-center gap-2 ml-auto">
+              <div className="flex items-center gap-2 ml-auto shrink-0">
                 <button onClick={handleSaveToCloud} disabled={isCloudSaving} className={`text-blue-500 hover:text-blue-400 ${isCloudSaving ? 'animate-pulse' : ''}`} title="Save to Cloud">
                   <Cloud className="w-3.5 h-3.5" />
                 </button>
@@ -1133,9 +1136,14 @@ export function BuilderLayout({ userEmail }: { userEmail?: string }) {
                 </label>
               </div>
             </div>
-            <FileExplorer files={files} activeFile={activeFile} setActiveFile={setActiveFile} />
-          </div>
-          <div className={`absolute inset-0 md:relative flex-1 bg-transparent flex-col z-10 min-h-0 min-w-0 ${mobileTab === 'editor' || mobileTab === 'tools' ? 'flex' : 'hidden md:flex'}`}>
+
+            <div className="flex flex-1 relative min-h-0 min-w-0 flex-col md:flex-row">
+              {/* File Explorer Sidebar */}
+              <div className={`absolute inset-0 md:relative w-full md:w-[260px] lg:w-[300px] border-r ${currentTheme.border} bg-transparent flex-col z-20 shrink-0 min-h-0 min-w-0 max-w-full transition-all duration-300 ${mobileTab === 'files' ? 'flex' : 'hidden md:flex'}`}>
+                <FileExplorer files={files} activeFile={activeFile} setActiveFile={setActiveFile} />
+              </div>
+              
+              <div className={`absolute inset-0 md:relative flex-1 bg-transparent flex-col z-10 min-h-0 min-w-0 ${mobileTab === 'editor' || mobileTab === 'tools' ? 'flex' : 'hidden md:flex'}`}>
             {viewMode === 'canvas' ? (
                <ArchitectureCanvas triggerGeneration={(prompt) => executeAgentPrompt(prompt, files, true)} files={files} />
             ) : viewMode === 'versions' ? (
@@ -1212,16 +1220,17 @@ export function BuilderLayout({ userEmail }: { userEmail?: string }) {
             ) : (
               <div className="flex items-center justify-center h-full text-slate-500 text-sm">Select a file to edit</div>
             )}
+              </div>
+            </div>
           </div>
-        </div>
         {/* Terminal / Logs Panel */}
-        <div className={`absolute inset-0 md:relative md:h-[250px] border ${currentTheme.border} rounded-2xl ${currentTheme.shadow} ${currentTheme.panelBg} backdrop-blur-3xl flex-col z-30 shrink-0 min-h-0 min-w-0 max-w-full mt-2 md:mt-4 overflow-hidden transition-colors duration-500 ${mobileTab === 'terminal' ? 'flex' : 'hidden md:flex'}`}>
+        <div className={`absolute inset-0 md:relative md:h-[250px] border ${currentTheme.border} rounded-2xl ${currentTheme.shadow} ${currentTheme.panelBg} backdrop-blur-3xl flex-col z-30 shrink-0 min-h-0 min-w-0 max-w-full mt-2 md:mt-4 overflow-hidden transition-colors duration-500 ${mobileTab === 'terminal' ? 'flex' : (showBottomPanel ? 'hidden md:flex' : 'hidden')}`}>
            <LogsPanel logs={logs} onCommand={handleTerminalCommand} onSelfHeal={handleSelfHeal} />
         </div>
       </div>
       
       {/* Right Column: Preview */}
-      <div className={`absolute inset-0 md:relative w-full md:w-[35%] lg:w-[45%] flex-col border ${currentTheme.border} rounded-2xl ${currentTheme.panelBg} backdrop-blur-3xl z-30 ${currentTheme.shadow} shrink-0 min-h-0 min-w-0 max-w-full transition-all duration-500 overflow-hidden ${mobileTab === 'preview' ? 'flex translate-x-0' : 'hidden md:flex'}`}>
+      <div className={`absolute inset-0 md:relative w-full md:w-[35%] lg:w-[45%] flex-col border ${currentTheme.border} rounded-2xl ${currentTheme.panelBg} backdrop-blur-3xl z-30 ${currentTheme.shadow} shrink-0 min-h-0 min-w-0 max-w-full transition-all duration-500 overflow-hidden ${mobileTab === 'preview' ? 'flex translate-x-0' : (showRightPanel ? 'hidden md:flex' : 'hidden')}`}>
         <div className={`h-12 border-b ${currentTheme.border} flex items-center px-4 justify-between bg-transparent shrink-0 overflow-x-auto whitespace-nowrap`}>
            <div className="flex items-center gap-2 mr-4">
              <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse shrink-0" />
@@ -1288,9 +1297,9 @@ export function BuilderLayout({ userEmail }: { userEmail?: string }) {
           <Code className="w-5 h-5" />
           <span className="text-[10px] font-medium">Code</span>
         </button>
-        <button onClick={() => { setMobileTab('tools'); setViewMode('tools'); }} className={`flex-1 flex flex-col items-center justify-center gap-1 transition-colors ${mobileTab === 'tools' ? 'text-indigo-400 drop-shadow-[0_0_8px_rgba(129,140,248,0.5)]' : 'text-slate-500 hover:text-slate-300'}`}>
-          <Settings2 className="w-5 h-5" />
-          <span className="text-[10px] font-medium">Tools</span>
+        <button onClick={() => setMobileTab('terminal')} className={`flex-1 flex flex-col items-center justify-center gap-1 transition-colors ${mobileTab === 'terminal' ? 'text-indigo-400 drop-shadow-[0_0_8px_rgba(129,140,248,0.5)]' : 'text-slate-500 hover:text-slate-300'}`}>
+          <Terminal className="w-5 h-5" />
+          <span className="text-[10px] font-medium">Terminal</span>
         </button>
         <button onClick={() => setMobileTab('preview')} className={`flex-1 flex flex-col items-center justify-center gap-1 transition-colors ${mobileTab === 'preview' ? 'text-indigo-400 drop-shadow-[0_0_8px_rgba(129,140,248,0.5)]' : 'text-slate-500 hover:text-slate-300'}`}>
           <Play className="w-5 h-5" />
