@@ -15,6 +15,14 @@ export function ChatPanel({ files, setFiles, setLogs, clearChatTrigger, reloadCh
   const chatInputRef = useRef<HTMLInputElement>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
   const [isHydrated, setIsHydrated] = useState(false);
+  const [novaSaferEnabled, setNovaSaferEnabled] = useState(false);
+
+  useEffect(() => {
+    const saved = localStorage.getItem('nova_safer_mode');
+    if (saved === 'true') {
+      setNovaSaferEnabled(true);
+    }
+  }, []);
 
   useEffect(() => {
     const handleSetPrompt = (e: any) => {
@@ -193,7 +201,8 @@ export function ChatPanel({ files, setFiles, setLogs, clearChatTrigger, reloadCh
           appMode: appMode,
           memory: memoryState,
           aiModel,
-          apiKey
+          apiKey,
+          novaSaferEnabled
         }),
         signal: abortControllerRef.current.signal
       });
@@ -404,7 +413,21 @@ export function ChatPanel({ files, setFiles, setLogs, clearChatTrigger, reloadCh
             </button>
           </div>
         )}
-        <div className="flex justify-end mb-2">
+        <div className="flex justify-between items-center mb-2">
+          <div className="flex items-center gap-2">
+            <button 
+              type="button"
+              onClick={() => {
+                const newMode = !novaSaferEnabled;
+                setNovaSaferEnabled(newMode);
+                localStorage.setItem('nova_safer_mode', newMode ? 'true' : 'false');
+              }}
+              className={`text-[10px] uppercase font-bold px-2 py-1 rounded transition-colors ${novaSaferEnabled ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'bg-slate-800 text-slate-400 border border-slate-700'}`}
+            >
+              NoVa Safer: {novaSaferEnabled ? 'ON' : 'OFF'}
+            </button>
+            {novaSaferEnabled && <span className="text-[9px] text-emerald-400/70 italic">Cost-saving router active</span>}
+          </div>
           <button onClick={handleClearChat} className="text-[10px] uppercase font-bold text-slate-500 hover:text-rose-400 flex items-center gap-1 transition-colors">
             <Trash2 className="w-3 h-3" /> Clear Chat
           </button>
