@@ -38,6 +38,7 @@ The BYOD panel allows you to connect external backend-as-a-service providers.
 ### E. Environment Settings (.env & AI Engines)
 *   **How to Use Environment Variables:** Add your secret keys (like `DATABASE_URL`) here. The platform securely stores them in a local `.env` state and injects them into the Docker preview runner.
 *   **How to Use the Multi-Agent Switchboard:** The AI Engine dropdown lets you switch between `Default (Claude-Opus-4-7)`, `OpenAI (GPT-5-Codex)`, `Gemini Premium (Gemini-3-Pro)`, and `Gemini Free (gemini-2.5-flash)`. Select a provider and securely input your personal API key. It glows Emerald Green when verified. This controls the brain of the main Builder AI.
+*   **How to Use NoVa Safer Mode:** In the main Chat Panel next to the Clear Chat button, there is a toggle for "NoVa Safer". This is an enterprise-grade, cost-saving AI routing mode. When toggled ON, it intelligently splits the work: Gemini 2.5 Flash handles all non-coding questions, intent classification, and strict context filtering. Claude Sonnet 4.6 handles surgical coding and file patches using only the bare minimum required files. This massively reduces token costs while maintaining perfect code quality, and it automatically blocks the deletion of critical runner scaffolding (like package.json).
 
 ### F. Version History (Time Travel)
 NovaAI automatically takes "Atomic Snapshots" every time the AI modifies your files.
