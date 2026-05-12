@@ -27,9 +27,11 @@ The Canvas is a node-based visual drag-and-drop architecture tool.
     *   **Visual Building (No Buttons):** To build code visually, simply click the small circle handle on the edge of a node (e.g., "Login Component") and drag a wire to another node (e.g., "Auth API"). The *exact moment* you release your mouse, the AI instantly detects the connection and automatically writes the integration code!
 
 ### C. Tools (The Tool Registry)
-The Tool Registry allows you to inject external APIs directly into your project.
-*   **How to Use Stripe:** Click the Stripe tool card, input your Stripe Secret Key, and the AI will instantly understand your payment structure and can generate checkout sessions automatically.
-*   **How to Use Resend / Twilio:** Input your API keys into their respective tool cards. Once activated, you can simply tell the main AI Builder, "Build a contact form that emails me," and it will automatically use the active Resend integration to write the precise backend logic.
+The Tool Registry is essentially a 1-Click Plugin Injector for the virtual workspace. It allows you to inject external APIs, backend logic, and UI blocks safely into any framework.
+*   **How it Works:** When a tool is selected, the system clones your virtual file tree and executes the Tool's specific injection logic via `ToolRegistry.safeInject()`. This prevents state mutations. 
+*   **Safety and Environment Checks:** The inject function dynamically formats the code for your active framework (e.g., using `process.env` for Next.js vs `import.meta.env` for Vite) and creates a pre-injection snapshot. If the tool breaks anything, you can time-travel back instantly.
+*   **Expected Results:** Clicking "Inject" on a compatible tool immediately scaffolds boilerplate files (e.g., `/src/lib/supabaseClient.ts`), adds required dependencies to your package payload, and updates the Tool's badge to "Installed".
+*   **How to Use Stripe / Supabase / etc.:** Find the tool in the Explorer. If the tool says "Supported", click "Inject". Then, manually paste your API keys into the generated `.env` variables or code files, and your integration is ready.
 
 ### D. Database (BYOD - Bring Your Own Database)
 The BYOD panel allows you to connect external backend-as-a-service providers.

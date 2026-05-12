@@ -443,7 +443,7 @@ export function ChatPanel({ files, setFiles, setLogs, clearChatTrigger, reloadCh
           <button 
             type="button" 
             onClick={() => fileInputRef.current?.click()}
-            className="absolute left-2 top-2.5 p-1 text-slate-400 hover:text-indigo-400 transition-colors"
+            className="absolute left-2 top-2.5 p-1 z-10 text-slate-400 hover:text-indigo-400 transition-colors"
             title="Attach Design Reference"
           >
             <ImageIcon className="w-4 h-4" />

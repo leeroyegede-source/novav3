@@ -106,6 +106,7 @@ async function runDefaultAIRequest(body: any) {
 
 async function runNovaSaferRequest(body: any) {
   const prompt = body.prompt || "";
+  const imageBase64 = body.imageBase64;
   const safeFiles: Record<string, string> = {};
   const ignoredPatterns = ['node_modules/', '.next/', '.git/', 'dist/', 'build/', 'FULL_CODE_DUMP.txt'];
   for (const [path, content] of Object.entries(body.currentFiles || {})) {
@@ -168,11 +169,16 @@ Rules:
   
   if (routingDecision.selectedModel === 'gemini-2.5-flash') {
     const answerPrompt = `You are NoVa Safer AI (Gemini Flash). Handle this non-coding task: ${prompt}. Return a helpful, concise response.`;
+    const parts: any[] = [{ text: answerPrompt }];
+    if (imageBase64) {
+      const match = imageBase64.match(/^data:(image\/[a-zA-Z]+);base64,(.+)$/);
+      if (match) parts.push({ inline_data: { mime_type: match[1], data: match[2] } });
+    }
     const ansRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${geminiKey}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        contents: [{ role: 'user', parts: [{ text: answerPrompt }] }]
+        contents: [{ role: 'user', parts }]
       })
     });
     const ansData = await ansRes.json();
@@ -255,6 +261,17 @@ Safety Rules:
 3. If this is an auto-heal, provide one final retry fix based on the prompt.
 4. IMPORTANT: Escape all newlines in JSON strings as \\n. NEVER use literal newlines inside JSON values.`;
 
+    const claudeContent: any[] = [{ type: 'text', text: prompt }];
+    if (imageBase64) {
+      const match = imageBase64.match(/^data:(image\/[a-zA-Z]+);base64,(.+)$/);
+      if (match) {
+        claudeContent.push({
+          type: 'image',
+          source: { type: 'base64', media_type: match[1], data: match[2] }
+        });
+      }
+    }
+
     const claudeRes = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: {
@@ -266,7 +283,7 @@ Safety Rules:
         model: 'claude-sonnet-4-6',
         max_tokens: 8192,
         system: systemPrompt,
-        messages: [{ role: 'user', content: prompt }]
+        messages: [{ role: 'user', content: claudeContent }]
       })
     });
     

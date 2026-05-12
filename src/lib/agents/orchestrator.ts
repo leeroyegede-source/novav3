@@ -278,8 +278,15 @@ ${JSON.stringify(request.context.omittedFiles || [], null, 2)}
       const openAiMessages = [
         { role: "system", content: systemPrompt },
         ...anthropicMessages.map(m => {
-          const text = Array.isArray(m.content) ? m.content.find((p: any) => p.type === 'text')?.text || '' : m.content;
-          return { role: m.role, content: text };
+          if (Array.isArray(m.content)) {
+            const newContent = m.content.map((p: any) => {
+              if (p.type === 'text') return { type: 'text', text: p.text };
+              if (p.type === 'image') return { type: 'image_url', image_url: { url: `data:${p.source.media_type};base64,${p.source.data}` } };
+              return null;
+            }).filter(Boolean);
+            return { role: m.role, content: newContent };
+          }
+          return { role: m.role, content: m.content };
         })
       ];
       
@@ -304,8 +311,15 @@ ${JSON.stringify(request.context.omittedFiles || [], null, 2)}
       const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${activeGeminiKey}`;
       
       const contents = anthropicMessages.map(m => {
-        const text = Array.isArray(m.content) ? m.content.find((p: any) => p.type === 'text')?.text || '' : m.content;
-        return { role: m.role === 'assistant' ? 'model' : 'user', parts: [{ text }] };
+        if (Array.isArray(m.content)) {
+          const parts = m.content.map((p: any) => {
+            if (p.type === 'text') return { text: p.text };
+            if (p.type === 'image') return { inline_data: { mime_type: p.source.media_type, data: p.source.data } };
+            return null;
+          }).filter(Boolean);
+          return { role: m.role === 'assistant' ? 'model' : 'user', parts };
+        }
+        return { role: m.role === 'assistant' ? 'model' : 'user', parts: [{ text: m.content }] };
       });
 
       const res = await fetch(url, {
