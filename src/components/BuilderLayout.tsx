@@ -28,6 +28,7 @@ import { LogsPanel } from '@/components/preview/LogsPanel';
 import { RuntimeIndicator } from '@/components/preview/RuntimeIndicator';
 import { CloudSyncManager } from '@/lib/storage/cloudSync';
 import { CloudProjectsModal } from '@/components/editor/CloudProjectsModal';
+import { AgentProgressOverlay } from '@/components/chat/AgentProgressOverlay';
 import { Cloud, Upload, FolderUp, Rocket, Loader2, DownloadCloud, Trash2, StopCircle, GitBranch, Plus, Save, Clock, MessageSquare, Folder, Code, Terminal, Play, MoreHorizontal, Settings2, History } from 'lucide-react';
 
 export function BuilderLayout({ userEmail }: { userEmail?: string }) {
@@ -38,6 +39,13 @@ export function BuilderLayout({ userEmail }: { userEmail?: string }) {
   const [activeFile, setActiveFile] = useState<string | null>("/App.js");
   const [viewMode, setViewMode] = useState<'code' | 'canvas' | 'versions' | 'tools' | 'byod' | 'memory' | 'errors' | 'tests' | 'env' | 'deploy'>('code');
   const [logs, setLogs] = useState<string[]>(["[SYSTEM] Builder initialized. STAGE 1 loaded."]);
+  
+  useEffect(() => {
+    if (logs.length > 0) {
+      window.dispatchEvent(new CustomEvent('nova-agent-log', { detail: logs[logs.length - 1] }));
+    }
+  }, [logs]);
+
   const [isDeploying, setIsDeploying] = useState(false);
   const [deployUrl, setDeployUrl] = useState<string | null>(null);
   const [isHydrated, setIsHydrated] = useState(false);
@@ -456,42 +464,48 @@ export function BuilderLayout({ userEmail }: { userEmail?: string }) {
     let newFiles: Record<string, string> = {
       "/App.js": `export default function App() {\n  return <div>New ${newProjectMode} Project</div>;\n}`
     };
+    let initialActiveFile = "/App.js";
     
     if (newProjectMode === "Next.js") {
+      initialActiveFile = "/pages/index.js";
       newFiles = {
-        "/pages/index.js": `export default function Home() {\n  return <div className="min-h-screen bg-slate-900 text-white flex items-center justify-center font-bold text-2xl">\\n    <div className="flex flex-col items-center gap-4">\\n      <div className="w-16 h-16 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin"></div>\\n      NOVA-RUNNER-OK\\n    </div>\\n  </div>;\n}`,
+        "/pages/index.js": `export default function Home() {\n  return <div className="min-h-screen bg-slate-900 text-white flex items-center justify-center font-bold text-2xl text-center p-8">\\n    <div className="flex flex-col items-center gap-6">\\n      <div className="w-16 h-16 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin"></div>\\n      <p>Welcome to Nova AI. Your project will be displayed here shortly.</p>\\n    </div>\\n  </div>;\n}`,
         "/pages/_app.js": `import '../styles/globals.css';\n\nexport default function App({ Component, pageProps }) {\n  return <Component {...pageProps} />;\n}`,
         "/styles/globals.css": `@tailwind base;\n@tailwind components;\n@tailwind utilities;\n\nbody { background-color: #0f172a; color: white; }`,
         "/package.json": `{\n  "name": "nova-nextjs",\n  "version": "1.0.0",\n  "private": true,\n  "scripts": {\n    "dev": "next dev",\n    "build": "next build",\n    "start": "next start"\n  },\n  "dependencies": {\n    "next": "14.2.5",\n    "react": "18.3.1",\n    "react-dom": "18.3.1"\n  },\n  "devDependencies": {\n    "autoprefixer": "^10.4.19",\n    "postcss": "^8.4.39",\n    "tailwindcss": "^3.4.7"\n  }\n}`
       };
     } else if (newProjectMode === "React / Vite") {
+      initialActiveFile = "/src/App.jsx";
       newFiles = {
         "/index.html": `<!DOCTYPE html>\n<html lang="en">\n  <head>\n    <meta charset="UTF-8" />\n    <meta name="viewport" content="width=device-width, initial-scale=1.0" />\n    <title>Vite App</title>\n  </head>\n  <body>\n    <div id="root"></div>\n    <script type="module" src="/src/main.jsx"></script>\n  </body>\n</html>`,
         "/src/main.jsx": `import React from 'react';\nimport ReactDOM from 'react-dom/client';\nimport App from './App.jsx';\nimport './index.css';\n\nReactDOM.createRoot(document.getElementById('root')).render(\n  <React.StrictMode>\n    <App />\n  </React.StrictMode>,\n);`,
-        "/src/App.jsx": `export default function App() {\n  return <div className="min-h-screen bg-slate-900 text-white flex items-center justify-center font-bold text-2xl">\\n    <div className="flex flex-col items-center gap-4">\\n      <div className="w-16 h-16 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin"></div>\\n      NOVA-RUNNER-OK\\n    </div>\\n  </div>;\n}`,
+        "/src/App.jsx": `export default function App() {\n  return <div className="min-h-screen bg-slate-900 text-white flex items-center justify-center font-bold text-2xl text-center p-8">\\n    <div className="flex flex-col items-center gap-6">\\n      <div className="w-16 h-16 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin"></div>\\n      <p>Welcome to Nova AI. Your project will be displayed here shortly.</p>\\n    </div>\\n  </div>;\n}`,
         "/src/index.css": `@tailwind base;\n@tailwind components;\n@tailwind utilities;\n\nbody { background-color: #0f172a; color: white; }`,
         "/package.json": `{\n  "name": "vite-project",\n  "version": "0.0.0",\n  "scripts": {\n    "dev": "vite",\n    "build": "vite build",\n    "preview": "vite preview"\n  },\n  "dependencies": {\n    "react": "^18.3.1",\n    "react-dom": "^18.3.1"\n  },\n  "devDependencies": {\n    "@vitejs/plugin-react": "^4.3.1",\n    "autoprefixer": "^10.4.19",\n    "postcss": "^8.4.39",\n    "tailwindcss": "^3.4.7",\n    "vite": "^5.4.0"\n  }\n}`,
         "/vite.config.js": `import { defineConfig } from 'vite';\nimport react from '@vitejs/plugin-react';\n\nexport default defineConfig({\n  plugins: [react()],\n});`
       };
     } else if (newProjectMode === "Node / Express") {
+      initialActiveFile = "/index.js";
       newFiles = {
-        "/index.js": `const express = require('express');\nconst app = express();\nconst port = process.env.PORT || 3000;\n\napp.get('/', (req, res) => {\n  res.send('<h1>NOVA-RUNNER-OK</h1>');\n});\n\napp.listen(port, () => {\n  console.log(\`Server running on port \${port}\`);\n});`,
+        "/index.js": `const express = require('express');\nconst app = express();\nconst port = process.env.PORT || 3000;\n\napp.get('/', (req, res) => {\n  res.send('<div style="font-family: sans-serif; text-align: center; margin-top: 20%; color: #333;"><h1>Welcome to Nova AI. Your project will be displayed here shortly.</h1></div>');\n});\n\napp.listen(port, () => {\n  console.log(\`Server running on port \${port}\`);\n});`,
         "/package.json": `{\n  "name": "node-express",\n  "version": "1.0.0",\n  "main": "index.js",\n  "scripts": {\n    "start": "node index.js",\n    "dev": "nodemon index.js"\n  },\n  "dependencies": {\n    "express": "^4.19.2"\n  }\n}`
       };
-    } else if (newProjectMode === "PHP Native") {
+    } else if (newProjectMode === "PHP" || newProjectMode === "PHP Native") {
+      initialActiveFile = "/index.php";
       newFiles = {
-        "/index.php": `<?php\n  echo "<h1>NOVA-RUNNER-OK</h1>";\n?>`
+        "/index.php": `<?php\n  echo '<div style="font-family: sans-serif; text-align: center; margin-top: 20%; color: #333;"><h1>Welcome to Nova AI. Your project will be displayed here shortly.</h1></div>';\n?>`
       };
     } else if (newProjectMode === "Laravel") {
+      initialActiveFile = "/routes/web.php";
       newFiles = {
         "/artisan": `// Mock Laravel artisan`,
-        "/routes/web.php": `<?php\n\nuse Illuminate\\Support\\Facades\\Route;\n\nRoute::get('/', function () {\n    return '<h1>NOVA-RUNNER-OK</h1>';\n});`
+        "/routes/web.php": `<?php\n\nuse Illuminate\\Support\\Facades\\Route;\n\nRoute::get('/', function () {\n    return '<div style="font-family: sans-serif; text-align: center; margin-top: 20%; color: #333;"><h1>Welcome to Nova AI. Your project will be displayed here shortly.</h1></div>';\n});`
       };
     }
     
     setFiles(newFiles);
     setAppMode(newProjectMode);
-    setActiveFile("/App.js");
+    setActiveFile(initialActiveFile);
     setLogs(["[SYSTEM] Created new clean project."]);
     
     VersionManager.saveSnapshot(newFiles, 'Initial Setup');
@@ -590,38 +604,76 @@ export function BuilderLayout({ userEmail }: { userEmail?: string }) {
     }
   };
 
+  const handleVerifyCompile = async (newFiles: Record<string, string>): Promise<{success: boolean, files?: Record<string, string>}> => {
+    setLogs(prev => [...prev, `[SYSTEM] Running automated compile check...`]);
+    try {
+      const testRes = await fetch('/api/preview/start', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ projectId: 'nova-project-1', files: newFiles, appMode })
+      });
+      
+      if (!testRes.ok) {
+         const errData = await testRes.json();
+         const errStr = errData.error || errData.message || 'Unknown compile error';
+         setLogs(prev => [...prev, `[ERROR] Automated compile check failed. Triggering Auto-Heal...`]);
+         const healResult = await executeAutoHealPipeline(errStr, 'compile-error', newFiles);
+         return healResult;
+      } else {
+         setLogs(prev => [...prev, `[SYSTEM] Compile check passed!`]);
+         return { success: true, files: newFiles };
+      }
+    } catch(e) {
+      console.warn("Compile check request failed", e);
+      return { success: false, files: newFiles };
+    }
+  };
+
   const executeAgentPrompt = async (prompt: string, currentFilesState: Record<string, string>, isCanvas: boolean = false, isAutoHeal: boolean = false) => {
     setLogs(prev => [...prev, isCanvas ? `[CANVAS] Link detected! Booting Integration Agent...` : `[SYSTEM] Booting AI Agent to process request...`]);
     try {
-      const aiModel = localStorage.getItem('nova_ai_model') || 'default';
-      const apiKey = aiModel !== 'default' ? (localStorage.getItem(`nova_api_key_${aiModel}`) || '') : '';
+      let aiModel = localStorage.getItem('nova_ai_model') || 'default';
+      let apiKey = aiModel !== 'default' ? (localStorage.getItem(`nova_api_key_${aiModel}`) || '') : '';
 
       const res = await fetch('/api/ai/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ prompt, currentFiles: currentFilesState, isAutoHeal, aiModel, apiKey })
       });
-      const data = await res.json();
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+         throw new Error(data.error || data.message || `Server responded with status ${res.status}`);
+      }
       if (data.files) {
         setFiles(data.files);
         setLogs(prev => [...prev, isCanvas ? `[SYSTEM] Canvas AI integration code automatically applied!` : `[SYSTEM] AI modifications applied successfully.`]);
+        
+        if (!isAutoHeal) {
+           await handleVerifyCompile(data.files);
+        }
+        
         return data.files;
       }
     } catch (err: unknown) {
-      setLogs(prev => [...prev, `[ERROR] AI integration failed: ${(err as Error).message}`]);
+      const errMsg = (err as Error).message || '';
+      if (errMsg.includes('credit balance is too low') || errMsg.includes('400') || errMsg.includes('429')) {
+         setLogs(prev => [...prev, `[CRITICAL] API Credit Exhaustion Detected!`]);
+         throw new Error('CREDIT_LIMIT');
+      }
+      setLogs(prev => [...prev, `[ERROR] AI integration failed: ${errMsg}`]);
     }
     return null;
   };
 
-  const executeAutoHealPipeline = async (prompt: string, reportId: string) => {
+  const executeAutoHealPipeline = async (prompt: string, reportId: string, originalFilesState: Record<string, string>): Promise<{success: boolean, files?: Record<string, string>}> => {
     const memory = ProjectMemory.getMemory();
-    const originalFiles = files; // For rollback
+    const originalFiles = originalFilesState; // For rollback
     
     setLogs(prev => [...prev, `[AUTO-HEAL] Starting repair pipeline for ${reportId}...`]);
     
     let currentAttempt = 1;
     let success = false;
-    let currentFilesState = files;
+    let currentFilesState = originalFiles;
 
     while (currentAttempt <= 3 && !success) {
       setLogs(prev => [...prev, `[AUTO-HEAL] Attempt ${currentAttempt}/3...`]);
@@ -629,7 +681,15 @@ export function BuilderLayout({ userEmail }: { userEmail?: string }) {
       
       const promptWithAttempt = `${prompt}\n\nThis is attempt ${currentAttempt} of 3. Ensure your fix is minimal and runner-safe.`;
       
-      const newFiles = await executeAgentPrompt(promptWithAttempt, currentFilesState, false, true);
+      let newFiles;
+      try {
+         newFiles = await executeAgentPrompt(promptWithAttempt, currentFilesState, false, true);
+      } catch (err: unknown) {
+         if ((err as Error).message === 'CREDIT_LIMIT') {
+             setLogs(prev => [...prev, `[AUTO-HEAL] API Credits Exhausted. Aborting Auto-Heal loop and initiating SAFE ROLLBACK to Stable Build Checkpoint...`]);
+             break;
+         }
+      }
       
       if (!newFiles) {
         setLogs(prev => [...prev, `[AUTO-HEAL] Agent failed to return files on attempt ${currentAttempt}.`]);
@@ -649,7 +709,7 @@ export function BuilderLayout({ userEmail }: { userEmail?: string }) {
         });
         
         if (testRes.ok) {
-           setLogs(prev => [...prev, `[AUTO-HEAL] Validation passed! Fix successful.`]);
+           setLogs(prev => [...prev, `[AUTO-HEAL] Validation passed! Encountered error and successfully fixed it on attempt ${currentAttempt}.`]);
            success = true;
            ProjectMemory.addItem({
              type: 'todo',
@@ -660,7 +720,11 @@ export function BuilderLayout({ userEmail }: { userEmail?: string }) {
            break;
         } else {
            const errData = await testRes.json();
-           setLogs(prev => [...prev, `[AUTO-HEAL] Validation failed on attempt ${currentAttempt}: ${errData.error}`]);
+           const errStr = errData.error || 'Unknown validation error';
+           setLogs(prev => [...prev, `[AUTO-HEAL] Validation failed on attempt ${currentAttempt}: ${errStr}`]);
+           if (currentAttempt === 3) {
+             setLogs(prev => [...prev, `[AUTO-HEAL] Failed to fix error after 3 attempts. Raw Error: ${errStr}`]);
+           }
         }
       } catch (err: any) {
         setLogs(prev => [...prev, `[AUTO-HEAL] Validation network error on attempt ${currentAttempt}: ${err.message}`]);
@@ -673,7 +737,12 @@ export function BuilderLayout({ userEmail }: { userEmail?: string }) {
       setLogs(prev => [...prev, `[AUTO-HEAL] All 3 attempts failed. Rolling back to last stable version.`]);
       setFiles(originalFiles);
       VersionManager.saveSnapshot(originalFiles, `Rollback after failed auto-heal`);
+      setTimeout(() => { autoHealTriggeredRef.current = false; }, 10000);
+      return { success: false, files: originalFiles };
     }
+
+    setTimeout(() => { autoHealTriggeredRef.current = false; }, 10000);
+    return { success: true, files: currentFilesState };
   };
 
   const pollDeploymentStatus = async (id: string, initialUrl: string, currentFilesState: Record<string, string>) => {
@@ -845,7 +914,7 @@ export function BuilderLayout({ userEmail }: { userEmail?: string }) {
          setLogs(prev => [...prev, `[SYSTEM] No recent errors found in terminal to heal.`]);
          return;
        }
-       handleSelfHeal(lastError);
+       executeAutoHealPipeline(lastError, 'terminal-error', files);
        return;
     }
 
@@ -867,11 +936,7 @@ export function BuilderLayout({ userEmail }: { userEmail?: string }) {
   };
 
   const handleSelfHeal = async (errorLog: string) => {
-    setLogs(prev => [...prev, "[AUTONOMOUS HEALING] Critical error detected! Triggering Zero-Click Self-Healing..."]);
-    const prompt = `The terminal threw this error: ${errorLog}. Please analyze the error, identify the bug in my files, and fix it. Return the corrected files.`;
-    await executeAgentPrompt(prompt, files);
-    // Allow cooldown before re-triggering auto-heal
-    setTimeout(() => { autoHealTriggeredRef.current = false; }, 10000);
+    executeAutoHealPipeline(errorLog, 'manual-heal', files);
   };
 
   const handleFolderUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -1025,6 +1090,7 @@ export function BuilderLayout({ userEmail }: { userEmail?: string }) {
 
   return (
     <div className={`flex flex-col h-[100dvh] w-screen max-w-full font-sans antialiased tracking-tight overflow-hidden relative transition-colors duration-500 ${currentTheme.appBg}`}>
+      <AgentProgressOverlay />
       {/* Ambient Deep Space Glows (God-Tier) */}
       {theme === 'godlike' && (
         <div className="absolute inset-0 overflow-hidden pointer-events-none z-0 opacity-80">
@@ -1071,6 +1137,7 @@ export function BuilderLayout({ userEmail }: { userEmail?: string }) {
             clearChatTrigger={clearChatTrigger} 
             reloadChatTrigger={reloadChatTrigger}
             appMode={appMode}
+            onVerifyCompile={handleVerifyCompile}
           />
         </div>
       
@@ -1185,7 +1252,7 @@ export function BuilderLayout({ userEmail }: { userEmail?: string }) {
                <ErrorPanel 
                  files={files}
                  appMode={appMode}
-                 onAutoHeal={(prompt, reportId) => executeAutoHealPipeline(prompt, reportId)}
+                 onAutoHeal={(prompt, reportId) => executeAutoHealPipeline(prompt, reportId, files)}
                  onLog={(msg) => setLogs(prev => [...prev, msg])}
                />
             ) : viewMode === 'tests' ? (
@@ -1193,7 +1260,7 @@ export function BuilderLayout({ userEmail }: { userEmail?: string }) {
                  files={files}
                  appMode={appMode}
                  onFilesUpdate={setFiles}
-                 onAutoHeal={(prompt, reportId) => executeAutoHealPipeline(prompt, reportId)}
+                 onAutoHeal={(prompt, reportId) => executeAutoHealPipeline(prompt, reportId, files)}
                  onLog={(msg) => setLogs(prev => [...prev, msg])}
                />
             ) : viewMode === 'env' ? (
@@ -1265,19 +1332,19 @@ export function BuilderLayout({ userEmail }: { userEmail?: string }) {
                  return prev;
                });
 
-               if (!autoHealTriggeredRef.current && !isDeploying && additions.length > 0) {
-                 const errorLog = additions.find(l => 
-                   l.includes('Syntax error') || 
-                   l.includes('Failed to compile') || 
-                   l.includes('Module not found') || 
-                   l.includes('ReferenceError') ||
-                   l.includes('Parsing css source code failed')
-                 );
-                 if (errorLog) {
-                   autoHealTriggeredRef.current = true;
-                   handleSelfHeal(errorLog);
+                 if (!autoHealTriggeredRef.current && !isDeploying && additions.length > 0) {
+                   const errorLog = additions.find(l => 
+                     l.includes('Syntax error') || 
+                     l.includes('Failed to compile') || 
+                     l.includes('Module not found') || 
+                     l.includes('ReferenceError') ||
+                     l.includes('Parsing css source code failed')
+                   );
+                   if (errorLog) {
+                     autoHealTriggeredRef.current = true;
+                     executeAutoHealPipeline(errorLog, 'runtime-error', files);
+                   }
                  }
-               }
              }}
            />
         </div>

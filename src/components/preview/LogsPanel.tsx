@@ -31,14 +31,6 @@ export function LogsPanel({ logs, onCommand, onSelfHeal }: LogsPanelProps) {
           return (
             <div key={i} className={`flex items-start justify-between ${isError ? 'text-rose-400' : ''}`}>
               <span className="whitespace-pre-wrap flex-1">{log}</span>
-              {isError && onSelfHeal && (
-                <button 
-                  onClick={() => onSelfHeal(log)}
-                  className="ml-4 flex items-center gap-1 bg-rose-500/20 hover:bg-rose-500/40 text-rose-300 px-2 py-0.5 rounded text-[10px] uppercase font-bold border border-rose-500/30 transition-colors shrink-0"
-                >
-                  <Wand2 className="w-3 h-3" /> Fix
-                </button>
-              )}
             </div>
           );
         })}

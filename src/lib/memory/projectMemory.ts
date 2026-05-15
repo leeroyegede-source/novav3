@@ -36,6 +36,7 @@ export interface ProjectMemoryState {
   last_stable_version_id?: string;
   last_failed_version_id?: string;
   pending_plan?: { stage: number | string, task: string }[];
+  full_plan?: { stage: number | string, task: string }[];
   build_state?: BuildState;
   items: MemoryItem[];
   updated_at: number;
@@ -102,7 +103,7 @@ export class ProjectMemory {
     this.state = state;
     if (typeof window !== 'undefined') {
       localStorage.setItem(this.STORAGE_KEY, JSON.stringify(state));
-      
+      window.dispatchEvent(new CustomEvent('nova-memory-update', { detail: state }));
     }
   }
 
@@ -146,9 +147,12 @@ export class ProjectMemory {
     this.saveMemory(state);
   }
 
-  static savePendingPlan(plan: any[]) {
+  static savePendingPlan(plan: any[], fullPlan?: any[]) {
     const state = this.getMemory();
     state.pending_plan = plan;
+    if (fullPlan) {
+      state.full_plan = fullPlan;
+    }
     this.saveMemory(state);
   }
 

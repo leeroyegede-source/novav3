@@ -4,7 +4,7 @@ import { VersionManager } from '@/lib/memory/versionManager';
 import { ProjectMemory } from '@/lib/memory/projectMemory';
 import { LocalDB, STORE_CHAT } from '@/lib/storage/indexedDB';
 
-export function ChatPanel({ files, setFiles, setLogs, clearChatTrigger, reloadChatTrigger, appMode }: { files: Record<string, string>, setFiles: (f: Record<string, string>) => void, setLogs: (cb: (prev: string[]) => string[]) => void, clearChatTrigger?: number, reloadChatTrigger?: number, appMode?: string }) {
+export function ChatPanel({ files, setFiles, setLogs, clearChatTrigger, reloadChatTrigger, appMode, onVerifyCompile }: { files: Record<string, string>, setFiles: (f: Record<string, string>) => void, setLogs: (cb: (prev: string[]) => string[]) => void, clearChatTrigger?: number, reloadChatTrigger?: number, appMode?: string, onVerifyCompile?: (files: Record<string, string>) => Promise<{success: boolean, files?: Record<string, string>}> }) {
   const [prompt, setPrompt] = useState("");
   const [messages, setMessages] = useState<{role: string, content: string, reasoning?: string, image?: string}[]>([{ role: 'agent', content: "Welcome to NovaAI! Describe the app you want to build or drop a design screenshot."}]);
   const [isGenerating, setIsGenerating] = useState(false);
@@ -14,6 +14,7 @@ export function ChatPanel({ files, setFiles, setLogs, clearChatTrigger, reloadCh
   const fileInputRef = useRef<HTMLInputElement>(null);
   const chatInputRef = useRef<HTMLInputElement>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
+  const hiddenSubmitRef = useRef<HTMLButtonElement>(null);
   const [isHydrated, setIsHydrated] = useState(false);
 
   useEffect(() => {
@@ -21,8 +22,16 @@ export function ChatPanel({ files, setFiles, setLogs, clearChatTrigger, reloadCh
       setPrompt(prev => prev ? prev + ' ' + e.detail : e.detail);
       setTimeout(() => chatInputRef.current?.focus(), 50);
     };
+    const handleResume = () => {
+      setPrompt("continue");
+      setTimeout(() => hiddenSubmitRef.current?.click(), 50);
+    };
     window.addEventListener('nova-set-prompt', handleSetPrompt);
-    return () => window.removeEventListener('nova-set-prompt', handleSetPrompt);
+    window.addEventListener('nova-resume-execution', handleResume);
+    return () => {
+      window.removeEventListener('nova-set-prompt', handleSetPrompt);
+      window.removeEventListener('nova-resume-execution', handleResume);
+    };
   }, []);
 
   useEffect(() => {
@@ -205,21 +214,37 @@ export function ChatPanel({ files, setFiles, setLogs, clearChatTrigger, reloadCh
       
       const data = await res.json();
       
-      if (data.structuredResponse?.pendingPlan !== undefined) {
-        ProjectMemory.savePendingPlan(data.structuredResponse.pendingPlan);
-      }
+      // Move pending plan save to the end to prevent race condition with Auto-Heal
       if (data.buildState !== undefined) {
         ProjectMemory.updateBuildState(data.buildState);
       }
 
       if (data.files) {
         const newFiles = (isDemo || wipeExisting) ? data.files : { ...files, ...data.files };
+        
+        // Save the temp snapshot just in case we need a deep rollback
+        VersionManager.saveSnapshot(files, `Pre-AI (Temp Snapshot)`);
+        
+        let filesToApply = newFiles;
+
+        if (onVerifyCompile) {
+           const verifyResult = await onVerifyCompile(newFiles);
+           if (!verifyResult.success) {
+              setLogs(prev => [...prev, `[SYSTEM] Compile check failed permanently after Auto-Heal. Halting execution.`]);
+              setFiles(verifyResult.files || files); // Rollback
+              setIsGenerating(false);
+              return; // Do NOT save pending plan, DO NOT unlock UI
+           } else if (verifyResult.files) {
+              filesToApply = verifyResult.files; // Use fixed files if auto-heal succeeded
+           }
+        }
+        
         setHistory(prev => {
           const newHistory = prev.slice(0, timelineIndex + 1);
-          newHistory.push(newFiles);
+          newHistory.push(filesToApply);
           return newHistory;
         });
-        VersionManager.saveSnapshot(newFiles, `AI Agent: ${userMsg}`);
+        VersionManager.saveSnapshot(filesToApply, `AI Agent: ${userMsg}`);
         ProjectMemory.addItem({
           type: 'todo',
           title: `AI Task Complete`,
@@ -227,8 +252,13 @@ export function ChatPanel({ files, setFiles, setLogs, clearChatTrigger, reloadCh
           importance: 'medium'
         });
         setTimelineIndex(prev => prev + 1);
-        setFiles(newFiles);
+        setFiles(filesToApply);
         setLogs(prev => [...prev, `[SYSTEM] Applied file operations. Snapshot & Memory saved.`]);
+        
+        // NOW we unlock the Progress Overlay by saving the pending plan
+        if (data.structuredResponse?.pendingPlan !== undefined) {
+          ProjectMemory.savePendingPlan(data.structuredResponse.pendingPlan, data.structuredResponse.fullPlan);
+        }
       }
       if (data.message) {
         setMessages(prev => [...prev, { 
@@ -446,6 +476,7 @@ export function ChatPanel({ files, setFiles, setLogs, clearChatTrigger, reloadCh
           <button type="submit" disabled={isGenerating} className="absolute right-2 top-2.5 p-1 text-slate-400 hover:text-indigo-400 disabled:opacity-50">
             <Send className="w-4 h-4" />
           </button>
+          <button type="submit" ref={hiddenSubmitRef} className="hidden" />
         </form>
       </div>
     </div>
