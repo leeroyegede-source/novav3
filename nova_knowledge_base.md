@@ -72,3 +72,31 @@ The Local Sync CLI allows you to perfectly mirror your virtual workspace down to
 ## 3. The Main Chat Builder vs. The Nova Guide
 - **The Main Chat Panel (Right Side):** This is the coding agent. It reads the file system, writes code, deletes files, and builds the app.
 - **The Nova Guide (Bottom Right):** This is YOU. You are an advisory assistant. You know everything in this manual and vast global knowledge. **CRITICAL RULE:** You NEVER write code, output JSON, or modify files. Your ONLY job is to explain concepts conceptually, guide the user on where to click, and provide instructions on how to use the platform.
+
+## 4. The Anti-Gravity Strict Model Routing Contract & Pipeline
+The NovaAI backend operates using an enterprise-grade, state-machine driven pipeline designed to ruthlessly cut token costs, prevent infinite loop failures, and guard runner-critical files.
+
+### A. Strict Model Delegation (The Three Modes)
+1.  **NoVa Safer Mode (The Recommended Default):**
+    *   **The Brains (Cheap Tier):** Uses **Gemini 2.5 Flash** for task planning, breaking down large objectives into micro-stages, isolating build errors, and aggressively compressing the file context so Claude doesn't read useless files.
+    *   **The Builder (Premium Tier):** Uses **Claude Sonnet 4.6**. It receives only the token-compressed context and executes surgical code patches exactly as prescribed by Gemini Flash.
+2.  **Claude Default Mode:**
+    *   **The Brains:** Uses **Claude Haiku 4.5** for all planning, context compression, and error diagnostics.
+    *   **The Builder:** Uses **Claude Opus 4.7** for the absolute highest quality code generation.
+3.  **Gemini Free Mode:**
+    *   Uses **Gemini 2.5 Flash** natively across all tiers (Planning, Diagnostics, and Building).
+
+### B. The Dedicated Error Recovery Flow & Diagnostics Engine
+When the build crashes or the preview runner throws an error during an auto-heal, the system **does not** blindly pass the error back to the expensive Builder agent. 
+1.  The error log and current file tree are intercepted by the **Diagnostics Engine** (powered by Gemini 2.5 Flash or Claude Haiku 4.5).
+2.  The engine diagnoses the exact bug and generates a lightweight, highly specific **Focused Repair Plan** (e.g., "1. Open utils.ts. 2. Change string to number on line 42").
+3.  This exact repair plan is passed to the Builder Agent to surgically execute, preventing costly full-file rewrites and hallucinations.
+
+### C. Persistent Build State & Stateful Resumption
+The pipeline no longer relies on reading massive chat histories to know what it is doing.
+*   The system utilizes a strict `BUILD_STATE` schema (saving `current_stage`, `completed_steps`, and the `pending_plan`) directly into the `ProjectMemory`.
+*   If the system hits an API rate limit, runs out of credits, or stops for user approval between main stages, it securely freezes the pipeline.
+*   When the user types "continue", the backend revives the `BUILD_STATE` from memory and seamlessly resumes exactly where it left off.
+
+### D. Runner-Safe Protections
+The Builder Agent operates under a strict Runner-Safe prompt injection lock. It is explicitly forbidden from deleting or entirely rewriting core architecture files (`package.json`, `next.config.js`, `vite.config.js`, `server.js`) unless absolutely tasked, and must only use surgical patch arrays.

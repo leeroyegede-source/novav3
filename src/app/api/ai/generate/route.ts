@@ -1,11 +1,83 @@
 import { NextResponse } from 'next/server';
 import { routeToAgent, determineRoute } from '@/lib/agents/orchestrator';
 
+function applyFileUpdates(generatedFiles: Record<string, string>, safeFiles: Record<string, string>, updates: any) {
+  for (const [filePath, contentOrPatches] of Object.entries(updates)) {
+    if (typeof contentOrPatches === 'string') {
+      generatedFiles[filePath] = contentOrPatches;
+    } else if (Array.isArray(contentOrPatches)) {
+      let fileLines = (generatedFiles[filePath] || safeFiles[filePath] || '').split('\n');
+      const sortedPatches = [...contentOrPatches].sort((a, b) => b.startLine - a.startLine);
+      for (const patch of sortedPatches) {
+        if (patch.action === 'replace') {
+          const start = Math.max(0, patch.startLine - 1);
+          const end = Math.min(fileLines.length, patch.endLine);
+          const newLines = patch.code.split('\n');
+          fileLines.splice(start, end - start, ...newLines);
+        }
+      }
+      generatedFiles[filePath] = fileLines.join('\n');
+    }
+  }
+}
+
+async function generateExecutionPlan(prompt: string, aiModel: string, apiKey: string, sysPrompt: string) {
+  let jsonStr = "{}";
+  if (aiModel.includes('gemini') || aiModel === 'nova-safer') {
+    const geminiKey = apiKey || process.env.GEMINI_API_KEY;
+    if (geminiKey) {
+      const geminiRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${geminiKey}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          system_instruction: { parts: [{ text: sysPrompt }] },
+          contents: [{ role: 'user', parts: [{ text: prompt }] }],
+          generationConfig: { response_mime_type: "application/json" }
+        })
+      });
+      if (geminiRes.ok) {
+        const geminiData = await geminiRes.json();
+        jsonStr = geminiData.candidates?.[0]?.content?.parts?.[0]?.text || "{}";
+      }
+    }
+  } else {
+    const anthropicKey = apiKey || process.env.ANTHROPIC_API_KEY;
+    if (anthropicKey) {
+      const planRes = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: { 'x-api-key': anthropicKey, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
+        body: JSON.stringify({
+          model: 'claude-haiku-4-5',
+          max_tokens: 1500,
+          system: sysPrompt,
+          messages: [{ role: 'user', content: prompt }]
+        })
+      });
+      if (planRes.ok) {
+        const planData = await planRes.json();
+        jsonStr = planData.content?.[0]?.text || "{}";
+      }
+    }
+  }
+
+  const firstBrace = jsonStr.indexOf('{');
+  const lastBrace = jsonStr.lastIndexOf('}');
+  if (firstBrace !== -1 && lastBrace !== -1 && lastBrace >= firstBrace) {
+    jsonStr = jsonStr.substring(firstBrace, lastBrace + 1);
+  }
+  const parsedPlan = JSON.parse(jsonStr);
+  return parsedPlan.stages || [];
+}
 export async function POST(req: Request) {
   try {
     const body = await req.json();
-    if (body.novaSaferEnabled) {
-      return await runNovaSaferRequest(body);
+    if (body.aiModel === 'nova-safer') {
+      try {
+        const saferRes = await runNovaSaferRequest(body);
+        if (saferRes) return saferRes;
+      } catch (safeModeErr: any) {
+        console.warn("[NoVa Safer] Failed (likely out of credits). Falling back to standard model execution.", safeModeErr.message);
+      }
     }
     return await runDefaultAIRequest(body);
   } catch (error: unknown) {
@@ -64,42 +136,182 @@ async function runDefaultAIRequest(body: any) {
   // Structured Routing Step
   const routingInfo = await determineRoute(prompt, isAutoHeal);
 
-  // Stream progress headers or just do standard return for now
-  const response = await routeToAgent({
-    role: routingInfo.selectedRole as any,
-    routingInfo,
-    prompt,
-    context: {
-      files: finalFiles,
-      omittedFiles,
-      memory: memory,
-      logs: [],
-      imageBase64,
-      history,
-      appMode
-    },
-    aiModel,
-    apiKey
-  });
-  
   let generatedFiles = { ...safeFiles };
+  let finalMessage = "";
+  let finalReasoning = "";
+  let finalStructuredResponse: any = null;
+
+  // --- THE PLANNER GATEWAY (Agentic State Machine) ---
+  let plan: { stage: number | string, task: string }[] = [];
   
-  if (response.fileOperations?.create) {
-    generatedFiles = { ...generatedFiles, ...response.fileOperations.create };
+  if (!isAutoHeal) {
+    const pLower = prompt.toLowerCase();
+    if ((pLower.includes('continue') || pLower.includes('proceed')) && memory.pending_plan && memory.pending_plan.length > 0) {
+      console.log("[Planner Pipeline] Resuming paused execution plan...");
+      plan = memory.pending_plan;
+      finalMessage += `### Resuming Execution\nPicking up from Stage ${plan[0].stage}...\n`;
+    } else {
+      console.log("[Planner Pipeline] Task is Large/Medium. Generating strict execution plan...");
+      try {
+        const sysPrompt = `You are the NovaAI Planner Agent. Your ONLY job is to break the user's prompt into very small, token-safe coding stages.
+Respond in strict JSON ONLY:
+{
+  "stages": [
+    { "stage": 1, "task": "create layout and basic UI" },
+    { "stage": 2, "task": "add routing and navigation" }
+  ]
+}
+Rules: 
+1. Maximum 4 files per stage.
+2. Make tasks microscopic.`;
+        plan = await generateExecutionPlan(prompt, aiModel, apiKey, sysPrompt);
+      } catch (e) {
+        console.error("[Planner Pipeline] Failed to generate plan, falling back to single execution.", e);
+      }
+    }
   }
-  if (response.fileOperations?.update) {
-    generatedFiles = { ...generatedFiles, ...response.fileOperations.update };
-  }
-  if (response.fileOperations?.delete) {
-    response.fileOperations.delete.forEach((f: string) => delete generatedFiles[f]);
+
+  // --- THE EXECUTION LOOP ---
+  if (plan.length > 0) {
+    console.log(`[Orchestrator] Executing stages autonomously...`);
+    
+    while (plan.length > 0) {
+      const stage = plan[0];
+      console.log(`[Orchestrator] Running Stage ${stage.stage}: ${stage.task}`);
+      
+      const stagePrompt = `STAGE ${stage.stage}: ${stage.task}
+(Original overall goal: ${prompt})
+
+CRITICAL INSTRUCTION: Execute ONLY the exact task for this stage. Do NOT attempt to complete the rest of the project. Focus strictly on this micro-task.`;
+
+      try {
+        const compressedFiles = await compressStageContext(stage.task, generatedFiles, memory, aiModel, apiKey);
+        
+        const response = await routeToAgent({
+          role: routingInfo.selectedRole as any,
+          routingInfo,
+          prompt: stagePrompt,
+          context: {
+            files: compressedFiles,
+            omittedFiles,
+            memory: memory,
+            logs: [],
+            imageBase64,
+            history,
+            appMode
+          },
+          aiModel,
+          apiKey
+        });
+
+        if (response.message && (response.message.includes('hit the output limit') || response.message.includes('invalid JSON'))) {
+          console.warn(`[Self-Healing] Stage ${stage.stage} failed. Splitting dynamically...`);
+          const splitSysPrompt = `You are the NovaAI Stage Splitter. The following task was too large to execute. 
+Break this EXACT task into 2 or 3 microscopic sub-stages.
+Respond in strict JSON ONLY: { "stages": [ {"stage": "${stage.stage}.1", "task": "sub-task 1"}, {"stage": "${stage.stage}.2", "task": "sub-task 2"} ] }`;
+          try {
+            const subStages = await generateExecutionPlan(stage.task, aiModel, apiKey, splitSysPrompt);
+            if (subStages && subStages.length > 0) {
+              plan.shift();
+              plan.unshift(...subStages);
+              finalMessage += `\n\n🔄 **Stage ${stage.stage} Failed & Split**: Automatically breaking it down into smaller sub-stages...`;
+              continue;
+            }
+          } catch(e) {
+            console.warn("Failed to split stage.", e);
+          }
+        }
+
+        if (response.fileOperations?.create) {
+          generatedFiles = { ...generatedFiles, ...response.fileOperations.create };
+        }
+        if (response.fileOperations?.update) {
+          applyFileUpdates(generatedFiles, safeFiles, response.fileOperations.update);
+        }
+        if (response.fileOperations?.delete) {
+          response.fileOperations.delete.forEach((f: string) => delete generatedFiles[f]);
+        }
+        
+        finalMessage += `\n\n✅ **Stage ${stage.stage} Complete**: ${stage.task}\n${response.message}`;
+        finalReasoning = response.reasoning;
+        finalStructuredResponse = response.structuredResponse || {};
+        
+        plan.shift(); // remove completed stage
+
+        // Stop for permission if the NEXT stage is a main stage (integer)
+        if (plan.length > 0) {
+          const nextStage = plan[0];
+          const isNextMicro = String(nextStage.stage).includes('.');
+          if (!isNextMicro) {
+            finalMessage += `\n\n⏸️ **Waiting for Approval**\nReady for Stage ${nextStage.stage}: ${nextStage.task}\nReply "proceed" or "continue" to execute the next stage.`;
+            finalStructuredResponse.pendingPlan = plan;
+            break;
+          }
+        } else {
+          finalMessage += `\n\n🎉 **All Stages Complete!**`;
+          finalStructuredResponse.pendingPlan = [];
+        }
+
+      } catch (err: any) {
+        if (err.message.includes('credit') || err.message.includes('429') || err.message.includes('balance') || err.message.includes('Overloaded')) {
+          finalMessage += `\n\n⚠️ **Credit / Rate Limit Exhausted**\nStopped at Stage ${stage.stage}. Please add credits or wait, and reply "continue" to resume this exact stage.`;
+          if (!finalStructuredResponse) finalStructuredResponse = {};
+          finalStructuredResponse.pendingPlan = plan;
+          break;
+        } else {
+          throw err;
+        }
+      }
+    }
+    
+  } else {
+    // Standard Single Execution (Small Tasks or Auto-Heal)
+    let finalPrompt = prompt;
+    
+    // --- THE DEDICATED ERROR RECOVERY FLOW ---
+    if (isAutoHeal) {
+      console.log("[Diagnostics Engine] Analyzing build failure...");
+      finalPrompt = await diagnoseBuildError(prompt, finalFiles, aiModel, apiKey);
+    }
+    
+    const response = await routeToAgent({
+      role: routingInfo.selectedRole as any,
+      routingInfo,
+      prompt: finalPrompt,
+      context: {
+        files: finalFiles,
+        omittedFiles,
+        memory: memory,
+        logs: [],
+        imageBase64,
+        history,
+        appMode
+      },
+      aiModel,
+      apiKey
+    });
+    
+    if (response.fileOperations?.create) {
+      generatedFiles = { ...generatedFiles, ...response.fileOperations.create };
+    }
+    if (response.fileOperations?.update) {
+      applyFileUpdates(generatedFiles, safeFiles, response.fileOperations.update);
+    }
+    if (response.fileOperations?.delete) {
+      response.fileOperations.delete.forEach((f: string) => delete generatedFiles[f]);
+    }
+
+    finalMessage = response.message;
+    finalReasoning = response.reasoning;
+    finalStructuredResponse = response.structuredResponse;
   }
 
   return NextResponse.json({
     success: true,
     files: generatedFiles,
-    message: response.message,
-    reasoning: response.reasoning,
-    structuredResponse: response.structuredResponse,
+    message: finalMessage,
+    reasoning: finalReasoning,
+    structuredResponse: finalStructuredResponse,
     routing: routingInfo
   });
 }
@@ -206,136 +418,152 @@ Rules:
       },
       routing: routingDecision
     });
-  } else {
-    // Coding task via Claude Sonnet 4.6
-    const anthropicKey = process.env.ANTHROPIC_API_KEY;
-    if (!anthropicKey) throw new Error("Missing ANTHROPIC_API_KEY for NoVa Safer Coding mode.");
-    
-    const finalFiles: Record<string, string> = {};
-    const requiredSet = new Set(routingDecision.requiredFiles || []);
-    for (const f of Object.keys(safeFiles)) {
-      if (requiredSet.has(f) || f.includes('package.json') || f.includes('next.config') || f.includes('vite.config')) {
-        finalFiles[f] = safeFiles[f];
-      }
-    }
-    
-    const systemPrompt = `You are the NoVa Safer Coding Agent (Claude Sonnet 4.6).
-Task: ${prompt}
-App Mode: ${appMode}
-Is Auto Heal Debugging: ${isAutoHeal}
-
-Current required files:
-${JSON.stringify(finalFiles, null, 2)}
-Project Memory:
-${JSON.stringify(memory, null, 2)}
-
-You MUST return a STRICT JSON object representing file modifications. DO NOT wrap it in markdown \`\`\`json.
-{
-  "message": "A conversational markdown response",
-  "reasoning": "Why you made the changes",
-  "structuredResponse": {
-    "status": "Complete",
-    "mode": "${appMode}",
-    "editMode": "Surgical Patch",
-    "task": "short desc",
-    "plan": "Safe build plan",
-    "filesSelected": ["files you modified"],
-    "filesChanged": ["files you modified"],
-    "changesMade": "explanation",
-    "runnerCheck": "not run",
-    "previewCheck": "not run",
-    "saveCheck": "not saved",
-    "safetyCheck": { "snapshotCreated": true, "secretsExposed": false, "runnerTouched": false, "scaffoldChanged": false, "rollbackAvailable": true },
-    "nextStep": "continue"
-  },
-  "fileOperations": {
-    "create": { "/path/to/newfile.js": "code" },
-    "update": { "/path/to/existing.js": "code" },
-    "delete": []
   }
+  
+  // If it's a coding task, return null so the main pipeline (runDefaultAIRequest) can handle the multi-stage execution
+  return null;
 }
 
-Safety Rules: 
-1. Never delete runner-critical files. Preserve app mode scaffolding.
-2. Provide only surgical patches unless full rewrite is requested.
-3. If this is an auto-heal, provide one final retry fix based on the prompt.
-4. IMPORTANT: Escape all newlines in JSON strings as \\n. NEVER use literal newlines inside JSON values.`;
+async function compressStageContext(task: string, files: Record<string, string>, memory: any, aiModel: string, apiKey: string) {
+  const fileKeys = Object.keys(files);
+  if (fileKeys.length <= 4) return files; // Too small to need compression
 
-    const claudeContent: any[] = [{ type: 'text', text: prompt }];
-    if (imageBase64) {
-      const match = imageBase64.match(/^data:(image\/[a-zA-Z]+);base64,(.+)$/);
-      if (match) {
-        claudeContent.push({
-          type: 'image',
-          source: { type: 'base64', media_type: match[1], data: match[2] }
-        });
+  const prompt = `You are the NoVa Context Compressor. 
+Task: ${task}
+
+Available Files:
+${fileKeys.join('\n')}
+
+Select ONLY the files strictly required to complete this task. Ignore unnecessary files.
+Respond in strict JSON:
+{ "required_files": ["path/to/file1", "path/to/file2"] }`;
+
+  let jsonStr = "{}";
+
+  if (aiModel.includes('gemini') || aiModel === 'nova-safer') {
+      const geminiKey = apiKey || process.env.GEMINI_API_KEY;
+      if (geminiKey) {
+          try {
+              const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${geminiKey}`, {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({
+                      contents: [{ role: 'user', parts: [{ text: prompt }] }],
+                      generationConfig: { response_mime_type: "application/json" }
+                  })
+              });
+              if (res.ok) {
+                  const data = await res.json();
+                  jsonStr = data.candidates?.[0]?.content?.parts?.[0]?.text || "{}";
+              }
+          } catch(e) {}
       }
-    }
-
-    const claudeRes = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'x-api-key': anthropicKey,
-        'anthropic-version': '2023-06-01',
-        'content-type': 'application/json'
-      },
-      body: JSON.stringify({
-        model: 'claude-sonnet-4-6',
-        max_tokens: 8192,
-        system: systemPrompt,
-        messages: [{ role: 'user', content: claudeContent }]
-      })
-    });
-    
-    if (!claudeRes.ok) {
-      const errText = await claudeRes.text();
-      throw new Error("NoVa Safer coding failed: " + errText);
-    }
-    
-    const claudeData = await claudeRes.json();
-    const content = claudeData.content?.[0]?.text || "{}";
-    
-    let jsonStr = content;
-    const firstBrace = jsonStr.indexOf('{');
-    const lastBrace = jsonStr.lastIndexOf('}');
-    if (firstBrace !== -1 && lastBrace !== -1 && lastBrace >= firstBrace) {
-      jsonStr = jsonStr.substring(firstBrace, lastBrace + 1);
-    }
-    
-    let parsed;
-    try {
-      parsed = JSON.parse(jsonStr);
-    } catch (e) {
-      throw new Error("Failed to parse Claude Sonnet JSON response: " + content.substring(0, 150));
-    }
-    
-    let generatedFiles = { ...safeFiles };
-    if (parsed.fileOperations?.create) generatedFiles = { ...generatedFiles, ...parsed.fileOperations.create };
-    if (parsed.fileOperations?.update) generatedFiles = { ...generatedFiles, ...parsed.fileOperations.update };
-    
-    let isContractBroken = false;
-    if (parsed.fileOperations?.delete) {
-      const safeToDelete = parsed.fileOperations.delete.filter((f: string) => {
-        if (f.includes('package.json') || f.includes('vite.config') || f.includes('next.config') || f.includes('index.html') || f.includes('server.js') || f.includes('index.php')) {
-          isContractBroken = true;
-          return false;
-        }
-        return true;
-      });
-      safeToDelete.forEach((f: string) => delete generatedFiles[f]);
-    }
-    
-    if (isContractBroken) {
-      parsed.reasoning = (parsed.reasoning || "") + " [WARNING: Attempted to delete critical scaffold files. Blocked by NoVa Safer contract.]";
-    }
-    
-    return NextResponse.json({
-      success: true,
-      files: generatedFiles,
-      message: parsed.message || "Completed coding task with Claude Sonnet 4.6.",
-      reasoning: parsed.reasoning || "Executed code via Claude Sonnet.",
-      structuredResponse: parsed.structuredResponse,
-      routing: routingDecision
-    });
+  } else {
+      const anthropicKey = apiKey || process.env.ANTHROPIC_API_KEY;
+      if (anthropicKey) {
+          try {
+              const res = await fetch('https://api.anthropic.com/v1/messages', {
+                  method: 'POST',
+                  headers: { 'x-api-key': anthropicKey, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
+                  body: JSON.stringify({
+                      model: 'claude-haiku-4-5',
+                      max_tokens: 1500,
+                      system: "You are the NoVa Context Compressor.",
+                      messages: [{ role: 'user', content: prompt }]
+                  })
+              });
+              if (res.ok) {
+                  const data = await res.json();
+                  jsonStr = data.content?.[0]?.text || "{}";
+              }
+          } catch(e) {}
+      }
   }
+
+  try {
+      const parsed = JSON.parse(jsonStr);
+      if (parsed.required_files && Array.isArray(parsed.required_files)) {
+          const compressedFiles: Record<string, string> = {};
+          for (const f of parsed.required_files) {
+              if (files[f]) compressedFiles[f] = files[f];
+          }
+          // RUNNER CONTRACTS ALWAYS RETAINED
+          const contracts = ['package.json', 'next.config.js', 'vite.config.js', 'index.html', 'index.php'];
+          for (const contract of contracts) {
+              const matchedKey = Object.keys(files).find(k => k.includes(contract));
+              if (matchedKey) compressedFiles[matchedKey] = files[matchedKey];
+          }
+          if (Object.keys(compressedFiles).length > 0) return compressedFiles;
+      }
+  } catch(e) {
+      console.warn("[Context Compressor] Failed, falling back to full context.", e);
+  }
+  return files;
+}
+
+async function diagnoseBuildError(errorPrompt: string, files: Record<string, string>, aiModel: string, apiKey: string) {
+  const geminiKey = apiKey || process.env.GEMINI_API_KEY;
+  if (!geminiKey) return errorPrompt;
+  
+  const prompt = `You are the NoVa Diagnostics Agent.
+The build failed or the user reported the following error:
+---
+${errorPrompt}
+---
+Analyze this error and create a highly precise, step-by-step FOCUSED REPAIR PLAN for the coding agent. 
+Identify the likely files to fix and the exact code changes needed. Do not output code, just the precise plan.
+Respond in strict JSON:
+{ "repair_plan": "1. Open file X. 2. Change Y to Z to resolve the type error..." }`;
+
+  let jsonStr = "{}";
+
+  if (aiModel.includes('gemini') || aiModel === 'nova-safer') {
+      const geminiKey = apiKey || process.env.GEMINI_API_KEY;
+      if (geminiKey) {
+          try {
+              const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${geminiKey}`, {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({
+                      contents: [{ role: 'user', parts: [{ text: prompt }] }],
+                      generationConfig: { response_mime_type: "application/json" }
+                  })
+              });
+              if (res.ok) {
+                  const data = await res.json();
+                  jsonStr = data.candidates?.[0]?.content?.parts?.[0]?.text || "{}";
+              }
+          } catch(e) {}
+      }
+  } else {
+      const anthropicKey = apiKey || process.env.ANTHROPIC_API_KEY;
+      if (anthropicKey) {
+          try {
+              const res = await fetch('https://api.anthropic.com/v1/messages', {
+                  method: 'POST',
+                  headers: { 'x-api-key': anthropicKey, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
+                  body: JSON.stringify({
+                      model: 'claude-haiku-4-5',
+                      max_tokens: 1500,
+                      system: "You are the NoVa Diagnostics Agent.",
+                      messages: [{ role: 'user', content: prompt }]
+                  })
+              });
+              if (res.ok) {
+                  const data = await res.json();
+                  jsonStr = data.content?.[0]?.text || "{}";
+              }
+          } catch(e) {}
+      }
+  }
+
+  try {
+      const parsed = JSON.parse(jsonStr);
+      if (parsed.repair_plan) {
+          return `[AUTO-HEAL DIAGNOSTICS APPLIED]\nThe Diagnostics Engine analyzed the error and prescribed this repair plan. Execute it strictly:\n\n${parsed.repair_plan}\n\nOriginal Error:\n${errorPrompt}`;
+      }
+  } catch(e) {
+      console.warn("[Diagnostics Engine] Failed.", e);
+  }
+  return errorPrompt;
 }

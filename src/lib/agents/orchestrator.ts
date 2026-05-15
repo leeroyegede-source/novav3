@@ -178,22 +178,23 @@ PROJECT MEMORY CONTEXT:
 ${JSON.stringify(request.context.memory, null, 2)}
 Instructions: You MUST respect the Project Memory. Do not destroy known routes, APIs, or DB connections. If this is a continuation, build upon the previous work seamlessly without dropping files. If errors are noted in the memory, ensure your fix addresses them without repeating failures.
 
-NOVA AI MASTER AGENT BUILDER LOGIC (CRITICAL):
-1. CORE PRINCIPLES: Never rewrite the whole project. Always build in stages. Always obey app mode structure and runner contracts. Always use surgical modification by default. If you cannot find the correct file, ask the user to locate it instead of guessing.
-2. INTERACTIVE BUILD RULE: For medium/large/risky tasks, DO NOT start coding immediately. Respond with a Plan in the "message" field formatted exactly like:
-   Status: Needs Step Plan
-   Reason: <reason>
-   Plan: Stage 1: <goal>, Stage 2: <goal>...
-   Action: Reply "proceed stage 1" to start.
-   DO NOT include any fileOperations until the user replies "proceed".
-3. STRICT MODIFICATION RULE: Default to SURGICAL PATCH. Preserve imports, exports, handlers, and app mode structure.
-4. APP MODE RULES: The user has selected the App Mode: "${request.context.appMode || 'Auto Detect'}".
+NOVA AI MASTER AGENT BUILDER LOGIC AND TOKEN-SAFE STAGE BUILDER SYSTEM (CRITICAL):
+1. STAGE PLANNING: The backend has already broken this task down for you. Do not output a plan. Just execute the exact micro-task provided in the prompt.
+2. TOKEN-SAFE LIMITS: Do not output more than: 1 large file, 2 medium files, or 4 small files per stage. If a file is too large, split it into safe patches. Never stop in the middle of a file. If too large for one output, say: "This file is too large for one safe output. I will split it into Part 1, Part 2..."
+3. SURGICAL PATCHING (CRITICAL): You MUST NOT rewrite entire files. When updating existing files, provide a strict patch array targeting exact line numbers (startLine to endLine). DO NOT output full file contents for updates.
+4. COMPLETION MARKERS: Every output completing a stage MUST end its message with:
+   STAGE COMPLETE: [stage name]
+   NEXT STAGE: [next stage name]
+5. VALID STATE: Never use "continue" to complete a broken file. Every response must leave the project in a valid state.
+6. APP MODE & RUNNER CONTRACTS: The user has selected the App Mode: "${request.context.appMode || 'Auto Detect'}".
    - React/Vite: Preserve package.json, index.html, src/main.jsx, src/App.jsx.
-   - Next.js: You MUST strictly use the Pages Router (\`/pages/index.js\`, \`/pages/_app.js\`). Do NOT use the App Router (\`/app/page.js\`).
+   - Next.js: strictly use Pages Router (\`/pages/index.js\`). Do NOT use App Router.
    - Node/Express: Preserve server.js/index.js. MUST bind to \`process.env.PORT\`.
-5. AUTO-HEAL: If this is an auto-heal request, capture error, patch exact issue (max 1-3 files). Do NOT rewrite the entire app to fix a small syntax error.
-6. DESIGN AESTHETICS: The generated UI must use Tailwind CSS and MUST be breathtaking. Use smooth gradients, drop shadows, rounded corners, and micro-animations. Make it feel premium.
-7. OMITTED FILES: Some files were omitted from this context to prevent token overflow. You will see them in the "omittedFiles" list. DO NOT attempt to write placeholder text into real files.
+   - PHP: Preserve index.php.
+7. AUTO-HEAL: If this is an auto-heal request, patch exact issue. Do NOT rewrite the entire app.
+8. RUNNER-SAFE PROTECTION (CRITICAL): You MUST NEVER break or overwrite critical runner files unless explicitly tasked. Preserve NEXT.JS (package.json, next.config.js), REACT/VITE (index.html, vite.config.js, src/main.jsx), NODE (server.js, process.env.PORT). If you must update them, ONLY use surgical patches. Never blindly delete them.
+9. DESIGN AESTHETICS: The generated UI must use Tailwind CSS and MUST be breathtaking.
+10. OMITTED FILES: Do not write placeholder text into omitted real files.
 
 Structure your JSON response exactly like this:
 {
@@ -222,8 +223,12 @@ Structure your JSON response exactly like this:
     "nextStep": "proceed stage 1 | continue | locate file | fix error | review"
   },
   "fileOperations": {
-    "create": { "/path/to/newfile.js": "file content..." },
-    "update": { "/path/to/existingfile.js": "new file content..." },
+    "create": { "/path/to/newfile.js": "full file content..." },
+    "update": { 
+       "/path/to/existingfile.js": [
+         { "action": "replace", "startLine": 45, "endLine": 50, "code": "new precise replacement code" }
+       ]
+    },
     "delete": ["/path/to/file.js"]
   }
 }
@@ -274,41 +279,11 @@ ${JSON.stringify(request.context.omittedFiles || [], null, 2)}
   try {
     let content = '';
 
-    if (aiModel === 'openai') {
-      const openAiMessages = [
-        { role: "system", content: systemPrompt },
-        ...anthropicMessages.map(m => {
-          if (Array.isArray(m.content)) {
-            const newContent = m.content.map((p: any) => {
-              if (p.type === 'text') return { type: 'text', text: p.text };
-              if (p.type === 'image') return { type: 'image_url', image_url: { url: `data:${p.source.media_type};base64,${p.source.data}` } };
-              return null;
-            }).filter(Boolean);
-            return { role: m.role, content: newContent };
-          }
-          return { role: m.role, content: m.content };
-        })
-      ];
-      
-      const res = await fetch('https://api.openai.com/v1/chat/completions', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${customApiKey}` },
-        body: JSON.stringify({
-          model: 'GPT-5-Codex',
-          messages: openAiMessages,
-          response_format: { type: "json_object" }
-        })
-      });
-      if (!res.ok) throw new Error("OpenAI API Error: " + await res.text());
-      const data = await res.json();
-      content = data.choices[0].message.content;
-
-    } else if (aiModel.includes('gemini')) {
+    if (aiModel.includes('gemini')) {
       const activeGeminiKey = customApiKey || process.env.GEMINI_API_KEY;
       if (!activeGeminiKey) throw new Error("Missing Gemini API Key. Please add it in Settings or your .env file.");
 
-      const modelName = aiModel === 'gemini-free' ? 'gemini-2.5-flash' : 'Gemini-3-Pro';
-      const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${activeGeminiKey}`;
+      const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${activeGeminiKey}`;
       
       const contents = anthropicMessages.map(m => {
         if (Array.isArray(m.content)) {
@@ -336,8 +311,9 @@ ${JSON.stringify(request.context.omittedFiles || [], null, 2)}
       content = data.candidates[0].content.parts[0].text;
 
     } else {
+      const activeModel = aiModel === 'nova-safer' ? 'claude-sonnet-4-6' : 'claude-opus-4-7';
       const msg = await anthropic.messages.create({
-        model: "claude-opus-4-7",
+        model: activeModel,
         max_tokens: 8192,
         system: systemPrompt,
         messages: anthropicMessages
@@ -345,11 +321,19 @@ ${JSON.stringify(request.context.omittedFiles || [], null, 2)}
       content = msg.content[0].type === 'text' ? msg.content[0].text : '{}';
     }
 
+    let jsonStr = content;
+    const firstBrace = jsonStr.indexOf('{');
+    const lastBrace = jsonStr.lastIndexOf('}');
+    if (firstBrace !== -1 && lastBrace !== -1 && lastBrace >= firstBrace) {
+      jsonStr = jsonStr.substring(firstBrace, lastBrace + 1);
+    }
+
     let parsed;
     try {
-      parsed = JSON.parse(content);
+      parsed = JSON.parse(jsonStr);
     } catch (e) {
-      throw new Error("The agent generated invalid JSON or hit the output limit.");
+      console.error("[Orchestrator] JSON Parse Failed. Raw content preview:", content.substring(0, 200) + "...");
+      throw new Error("The agent generated invalid JSON or hit the output limit. Please ask it to generate a smaller stage.");
     }
 
     // --- STEP 1: SELF-HEALING QA PIPELINE (AGENT DEBATE) ---
@@ -371,17 +355,59 @@ Structure:
   "fileOperations": { ... }
 }`;
 
-    const qaMsg = await anthropic.messages.create({
-      model: "claude-opus-4-7",
-      max_tokens: 8192,
-      system: qaPrompt,
-      messages: [
-        { role: "user", content: "Review the proposed code and return the final JSON." }
-      ]
-    });
+    let qaParsed = parsed;
+    try {
+      let qaJsonStr = "{}";
 
-    const qaContent = qaMsg.content[0].type === 'text' ? qaMsg.content[0].text : '{}';
-    const qaParsed = JSON.parse(qaContent);
+      if (aiModel.includes('gemini')) {
+        const activeGeminiKey = customApiKey || process.env.GEMINI_API_KEY;
+        if (activeGeminiKey) {
+          const geminiRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${activeGeminiKey}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              system_instruction: { parts: [{ text: qaPrompt }] },
+              contents: [{ role: 'user', parts: [{ text: "Review the proposed code and return the final JSON." }] }],
+              generationConfig: { response_mime_type: "application/json" }
+            })
+          });
+          if (geminiRes.ok) {
+            const geminiData = await geminiRes.json();
+            qaJsonStr = geminiData.candidates?.[0]?.content?.parts?.[0]?.text || "{}";
+          } else {
+             throw new Error("Gemini QA failed");
+          }
+        } else {
+           throw new Error("No Gemini key");
+        }
+      } else {
+        const qaMsg = await anthropic.messages.create({
+          model: "claude-opus-4-7",
+          max_tokens: 8192,
+          system: qaPrompt,
+          messages: [
+            { role: "user", content: "Review the proposed code and return the final JSON." }
+          ]
+        });
+        qaJsonStr = qaMsg.content[0].type === 'text' ? qaMsg.content[0].text : '{}';
+      }
+
+      const qaFirst = qaJsonStr.indexOf('{');
+      const qaLast = qaJsonStr.lastIndexOf('}');
+      if (qaFirst !== -1 && qaLast !== -1 && qaLast >= qaFirst) {
+        qaJsonStr = qaJsonStr.substring(qaFirst, qaLast + 1);
+      }
+      
+      try {
+        qaParsed = JSON.parse(qaJsonStr);
+      } catch (e) {
+        console.warn("[QA Pipeline] QA Agent generated invalid JSON. Falling back to Builder Agent output.");
+        qaParsed = parsed;
+      }
+    } catch (qaErr) {
+      console.warn("[QA Pipeline] QA Agent failed (likely out of credits). Bypassing QA and using original builder output.");
+      qaParsed = parsed;
+    }
 
     return {
       role: parsed.role || request.role,

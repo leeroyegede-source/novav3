@@ -9,6 +9,24 @@ export interface MemoryItem {
   created_at: number;
 }
 
+export interface BuildState {
+  current_stage: string | number;
+  completed_steps: string[];
+  pending_steps: any[];
+  current_task: string;
+  files_created: string[];
+  files_modified: string[];
+  last_successful_action: string;
+  last_error: string;
+  next_action: string;
+  runner_contract_status: string;
+  build_summary: string;
+  continuation_summary: string;
+  token_budget_status: string;
+  retry_count: number;
+  preview_status: string;
+}
+
 export interface ProjectMemoryState {
   project_id: string;
   project_name?: string;
@@ -17,6 +35,8 @@ export interface ProjectMemoryState {
   memory_summary: string;
   last_stable_version_id?: string;
   last_failed_version_id?: string;
+  pending_plan?: { stage: number | string, task: string }[];
+  build_state?: BuildState;
   items: MemoryItem[];
   updated_at: number;
 }
@@ -123,6 +143,37 @@ export class ProjectMemory {
   static clearFailedItems() {
     const state = this.getMemory();
     state.items = state.items.filter(i => i.type !== 'error');
+    this.saveMemory(state);
+  }
+
+  static savePendingPlan(plan: any[]) {
+    const state = this.getMemory();
+    state.pending_plan = plan;
+    this.saveMemory(state);
+  }
+
+  static updateBuildState(partialState: Partial<BuildState>) {
+    const state = this.getMemory();
+    if (!state.build_state) {
+      state.build_state = {
+        current_stage: 0,
+        completed_steps: [],
+        pending_steps: [],
+        current_task: "",
+        files_created: [],
+        files_modified: [],
+        last_successful_action: "",
+        last_error: "",
+        next_action: "",
+        runner_contract_status: "safe",
+        build_summary: "",
+        continuation_summary: "",
+        token_budget_status: "ok",
+        retry_count: 0,
+        preview_status: "unknown"
+      };
+    }
+    state.build_state = { ...state.build_state, ...partialState };
     this.saveMemory(state);
   }
 

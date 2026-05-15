@@ -24,7 +24,14 @@ export function EnvironmentPanel({ files, onFilesUpdate, onLog }: EnvironmentPan
     const val = e.target.value;
     setAiModel(val);
     localStorage.setItem('nova_ai_model', val);
+    window.dispatchEvent(new CustomEvent('nova-model-changed', { detail: val }));
   };
+
+  useEffect(() => {
+    const handleSync = (e: any) => setAiModel(e.detail);
+    window.addEventListener('nova-model-changed', handleSync);
+    return () => window.removeEventListener('nova-model-changed', handleSync);
+  }, []);
   
   const handleKeyChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const val = e.target.value;
@@ -78,8 +85,7 @@ export function EnvironmentPanel({ files, onFilesUpdate, onLog }: EnvironmentPan
                 className="bg-slate-900 border border-slate-700 text-slate-300 text-xs rounded p-2 outline-none hover:border-indigo-500/50 transition-colors"
              >
                 <option value="default">Default (Claude-Opus-4-7)</option>
-                <option value="openai">OpenAI (GPT-5-Codex)</option>
-                <option value="gemini-pro">Gemini Premium (Gemini-3-Pro)</option>
+                <option value="nova-safer">NoVa Safer (Gemini+Sonnet)</option>
                 <option value="gemini-free">Gemini Free (gemini-2.5-flash)</option>
              </select>
            </div>

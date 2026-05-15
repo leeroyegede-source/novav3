@@ -43,6 +43,12 @@ export function BuilderTopBar({ onToggleLeft, onToggleRight, onToggleBottom, onO
     }
   }, []);
 
+  useEffect(() => {
+    const handleSync = (e: any) => setAiModel(e.detail);
+    window.addEventListener('nova-model-changed', handleSync);
+    return () => window.removeEventListener('nova-model-changed', handleSync);
+  }, []);
+
   const handleModelChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const val = e.target.value;
     if (val === 'default') {
@@ -50,6 +56,7 @@ export function BuilderTopBar({ onToggleLeft, onToggleRight, onToggleBottom, onO
       localStorage.setItem('nova_ai_model', val);
       setShowKeyPopover(false);
       setPendingModel('');
+      window.dispatchEvent(new CustomEvent('nova-model-changed', { detail: val }));
     } else {
       setPendingModel(val);
       const storedKey = localStorage.getItem(`nova_api_key_${val}`) || '';
@@ -70,7 +77,7 @@ export function BuilderTopBar({ onToggleLeft, onToggleRight, onToggleBottom, onO
           headers: { Authorization: `Bearer ${tempKey}` }
         });
         isValid = res.ok;
-      } else if (pendingModel.includes('gemini')) {
+      } else if (pendingModel.includes('gemini') || pendingModel === 'nova-safer') {
         const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${tempKey}`);
         isValid = res.ok;
       }
@@ -80,6 +87,7 @@ export function BuilderTopBar({ onToggleLeft, onToggleRight, onToggleBottom, onO
         localStorage.setItem('nova_ai_model', pendingModel);
         setAiModel(pendingModel);
         setKeyStatus('verified');
+        window.dispatchEvent(new CustomEvent('nova-model-changed', { detail: pendingModel }));
         setTimeout(() => {
           setShowKeyPopover(false);
           setPendingModel('');
@@ -251,8 +259,7 @@ export function BuilderTopBar({ onToggleLeft, onToggleRight, onToggleBottom, onO
               className={`hidden md:flex text-[10px] font-bold px-2 py-1.5 rounded outline-none cursor-pointer transition-colors shrink-0 shadow-[0_0_10px_rgba(99,102,241,0.1)] ${aiModel !== 'default' && !pendingModel ? 'bg-emerald-900/30 hover:bg-emerald-900/50 border border-emerald-500/30 text-emerald-200' : 'bg-indigo-900/30 hover:bg-indigo-900/50 border border-indigo-500/30 text-indigo-200'}`}
           >
               <option value="default" className="bg-slate-900 text-slate-200">🤖 Claude (Default)</option>
-              <option value="openai" className="bg-slate-900 text-slate-200">🧠 GPT-4o</option>
-              <option value="gemini-pro" className="bg-slate-900 text-slate-200">💎 Gemini Pro</option>
+              <option value="nova-safer" className="bg-slate-900 text-slate-200">🛡️ NoVa Safer</option>
               <option value="gemini-free" className="bg-slate-900 text-slate-200">⚡ Gemini Free</option>
           </select>
           
