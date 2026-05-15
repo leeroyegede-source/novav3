@@ -77,7 +77,7 @@ export function BuilderTopBar({ onToggleLeft, onToggleRight, onToggleBottom, onO
           headers: { Authorization: `Bearer ${tempKey}` }
         });
         isValid = res.ok;
-      } else if (pendingModel.includes('gemini') || pendingModel === 'nova-safer') {
+      } else if (pendingModel.includes('gemini')) {
         const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${tempKey}`);
         isValid = res.ok;
       }
@@ -259,7 +259,6 @@ export function BuilderTopBar({ onToggleLeft, onToggleRight, onToggleBottom, onO
               className={`hidden md:flex text-[10px] font-bold px-2 py-1.5 rounded outline-none cursor-pointer transition-colors shrink-0 shadow-[0_0_10px_rgba(99,102,241,0.1)] ${aiModel !== 'default' && !pendingModel ? 'bg-emerald-900/30 hover:bg-emerald-900/50 border border-emerald-500/30 text-emerald-200' : 'bg-indigo-900/30 hover:bg-indigo-900/50 border border-indigo-500/30 text-indigo-200'}`}
           >
               <option value="default" className="bg-slate-900 text-slate-200">🤖 Claude (Default)</option>
-              <option value="nova-safer" className="bg-slate-900 text-slate-200">🛡️ NoVa Safer</option>
               <option value="gemini-free" className="bg-slate-900 text-slate-200">⚡ Gemini Free</option>
           </select>
           

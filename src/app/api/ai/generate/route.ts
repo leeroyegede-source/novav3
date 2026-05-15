@@ -55,7 +55,7 @@ async function generateExecutionPlan(prompt: string, aiModel: string, apiKey: st
         method: 'POST',
         headers: { 'x-api-key': anthropicKey, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
         body: JSON.stringify({
-          model: aiModel === 'nova-safer' ? 'claude-haiku-4-6' : 'claude-haiku-4-5',
+          model: (aiModel === 'claude-sonnet-4-6' || aiModel === 'claude-haiku-4-6') ? 'claude-haiku-4-6' : 'claude-haiku-4-5',
           max_tokens: 1500,
           system: sysPrompt,
           messages: [{ role: 'user', content: prompt }]
@@ -79,14 +79,6 @@ async function generateExecutionPlan(prompt: string, aiModel: string, apiKey: st
 export async function POST(req: Request) {
   try {
     const body = await req.json();
-    if (body.aiModel === 'nova-safer') {
-      try {
-        const saferRes = await runNovaSaferRequest(body);
-        if (saferRes) return saferRes;
-      } catch (safeModeErr: any) {
-        console.warn("[NoVa Safer] Failed (likely out of credits). Falling back to standard model execution.", safeModeErr.message);
-      }
-    }
     return await runDefaultAIRequest(body);
   } catch (error: unknown) {
     const err = error as Error;
@@ -356,125 +348,7 @@ Respond in strict JSON ONLY: { "stages": [ {"stage": "${stage.stage}.1", "task":
   });
 }
 
-async function runNovaSaferRequest(body: any) {
-  const prompt = body.prompt || "";
-  const imageBase64 = body.imageBase64;
-  const safeFiles: Record<string, string> = {};
-  const ignoredPatterns = ['node_modules/', '.next/', '.git/', 'dist/', 'build/', 'FULL_CODE_DUMP.txt'];
-  for (const [path, content] of Object.entries(body.currentFiles || {})) {
-    if (!ignoredPatterns.some(p => path.includes(p))) safeFiles[path] = content as string;
-  }
-  
-  const history = (body.history || []).slice(-4);
-  const memory = body.memory || {};
-  const appMode = body.appMode || "Auto Detect";
-  const isAutoHeal = body.isAutoHeal || false;
-  
-  const anthropicKey = process.env.ANTHROPIC_API_KEY;
-  if (!anthropicKey) throw new Error("Missing ANTHROPIC_API_KEY for NoVa Safer mode.");
-  
-  const classificationPrompt = `You are the NoVa Safer Classifier. 
-Classify the task into ONE of these types: non_coding, planning, coding, debugging, documentation, explanation.
-Task: ${prompt}
-App Mode: ${appMode}
-Is Auto Heal Request: ${isAutoHeal}
-
-Respond in strict JSON ONLY:
-{
-  "mode": "NoVa Safer",
-  "routerModel": "claude-haiku-4-6",
-  "codingModel": "claude-sonnet-4-6",
-  "taskType": "type",
-  "selectedModel": "model",
-  "reason": "reason",
-  "requiredFiles": [],
-  "excludedFiles": [],
-  "tokenPolicy": "minimal_context_only",
-  "riskLevel": "low",
-  "maxRetries": 2
-}
-
-Rules:
-1. If the task requires code generation, editing, fixing, debugging -> codingModel is claude-sonnet-4-6, selectedModel is claude-sonnet-4-6.
-2. If the task is explanation, summary, planning, documentation, or non_coding -> selectedModel is claude-haiku-4-6.
-3. In "requiredFiles", list exactly the files needed for the task from this available list: [${Object.keys(safeFiles).join(", ")}].
-`;
-
-  const classifyRes = await fetch(`https://api.anthropic.com/v1/messages`, {
-    method: 'POST',
-    headers: { 'x-api-key': anthropicKey, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
-    body: JSON.stringify({
-      model: 'claude-haiku-4-6',
-      max_tokens: 1000,
-      system: "You are the NoVa Safer Classifier.",
-      messages: [{ role: 'user', content: classificationPrompt }]
-    })
-  });
-  
-  if (!classifyRes.ok) throw new Error("NoVa Safer routing via Claude failed: " + await classifyRes.text());
-  const classifyData = await classifyRes.json();
-  const rawText = classifyData.content?.[0]?.text || "{}";
-  let routingDecision;
-  try {
-    routingDecision = JSON.parse(rawText);
-  } catch (e) {
-    routingDecision = { selectedModel: "claude-sonnet-4-6", reason: "Fallback coding model", requiredFiles: Object.keys(safeFiles) };
-  }
-  
-  if (routingDecision.selectedModel === 'claude-haiku-4-6') {
-    const answerPrompt = `You are NoVa Safer AI (Claude Haiku 4.6). Handle this non-coding task: ${prompt}. Return a helpful, concise response.`;
-    
-    const messagesContent: any[] = [];
-    if (imageBase64) {
-      const match = imageBase64.match(/^data:(image\/[a-zA-Z]+);base64,(.+)$/);
-      if (match) {
-         messagesContent.push({
-           type: 'image',
-           source: { type: 'base64', media_type: match[1], data: match[2] }
-         });
-      }
-    }
-    messagesContent.push({ type: 'text', text: answerPrompt });
-
-    const ansRes = await fetch(`https://api.anthropic.com/v1/messages`, {
-      method: 'POST',
-      headers: { 'x-api-key': anthropicKey, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
-      body: JSON.stringify({
-        model: 'claude-haiku-4-6',
-        max_tokens: 4000,
-        messages: [{ role: 'user', content: messagesContent }]
-      })
-    });
-    const ansData = await ansRes.json();
-    const answerText = ansData.content?.[0]?.text || "Task complete.";
-    
-    return NextResponse.json({
-      success: true,
-      files: safeFiles,
-      message: answerText,
-      reasoning: routingDecision.reason || "Processed by Claude Haiku 4.6.",
-      structuredResponse: {
-        status: 'Complete',
-        mode: appMode,
-        editMode: 'None',
-        task: prompt,
-        plan: routingDecision.reason || "Handled via Haiku",
-        filesSelected: [],
-        filesChanged: [],
-        changesMade: "No files changed.",
-        runnerCheck: "not run",
-        previewCheck: "not run",
-        saveCheck: "not saved",
-        safetyCheck: { snapshotCreated: false, secretsExposed: false, runnerTouched: false, scaffoldChanged: false, rollbackAvailable: false },
-        nextStep: "continue"
-      },
-      routing: routingDecision
-    });
-  }
-  
-  // If it's a coding task, return null so the main pipeline (runDefaultAIRequest) can handle the multi-stage execution
-  return null;
-}
+// Removed runNovaSaferRequest as requested
 
 async function compressStageContext(task: string, files: Record<string, string>, memory: any, aiModel: string, apiKey: string) {
   const fileKeys = Object.keys(files);
@@ -519,7 +393,7 @@ Respond in strict JSON:
                   method: 'POST',
                   headers: { 'x-api-key': anthropicKey, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
                   body: JSON.stringify({
-                      model: aiModel === 'nova-safer' ? 'claude-haiku-4-6' : 'claude-haiku-4-5',
+                      model: (aiModel === 'claude-sonnet-4-6' || aiModel === 'claude-haiku-4-6') ? 'claude-haiku-4-6' : 'claude-haiku-4-5',
                       max_tokens: 1500,
                       system: "You are the NoVa Context Compressor.",
                       messages: [{ role: 'user', content: prompt }]

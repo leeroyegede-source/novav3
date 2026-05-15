@@ -85,8 +85,7 @@ export function EnvironmentPanel({ files, onFilesUpdate, onLog }: EnvironmentPan
                 className="bg-slate-900 border border-slate-700 text-slate-300 text-xs rounded p-2 outline-none hover:border-indigo-500/50 transition-colors"
              >
                 <option value="default">Default (Claude-Opus-4-7)</option>
-                <option value="nova-safer">NoVa Safer (Gemini+Sonnet)</option>
-                <option value="gemini-free">Gemini Free (gemini-2.5-flash)</option>
+                <option value="gemini-free">Gemini Free</option>
              </select>
            </div>
            
@@ -100,11 +99,6 @@ export function EnvironmentPanel({ files, onFilesUpdate, onLog }: EnvironmentPan
                   placeholder="Paste your API key here..."
                   className="bg-slate-900 border border-slate-700 text-slate-300 text-xs rounded p-2 outline-none focus:border-indigo-500 transition-colors"
                />
-               {aiModel === 'gemini-free' && (
-                 <span className="text-[9px] text-amber-500/80 mt-1 leading-tight">
-                   Warning: Gemini Free Tier has a strict limit of 15 RPM. You must use your own free key from Google AI Studio to prevent global rate-limits.
-                 </span>
-               )}
              </div>
            )}
         </div>
