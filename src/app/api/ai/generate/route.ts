@@ -351,6 +351,34 @@ Respond in strict JSON ONLY: { "stages": [ {"stage": "${stage.stage}.1", "task":
     finalStructuredResponse = response.structuredResponse;
   }
 
+  // --- ASSET MANIFEST ENGINE ---
+  const manifestKey = Object.keys(generatedFiles).find(k => k.endsWith('nova-assets.json'));
+  if (manifestKey) {
+    try {
+      const manifestStr = generatedFiles[manifestKey];
+      const manifest = JSON.parse(manifestStr);
+      for (const [assetPath, config] of Object.entries(manifest)) {
+        if (typeof config === 'object' && config !== null) {
+          const { prompt: imgPrompt, width = 800, height = 600 } = config as any;
+          if (imgPrompt) {
+            console.log(`[Asset Engine] Fetching AI image for ${assetPath}...`);
+            const encodedPrompt = encodeURIComponent(imgPrompt);
+            const imgRes = await fetch(`https://image.pollinations.ai/prompt/${encodedPrompt}?width=${width}&height=${height}&nologo=true`);
+            if (imgRes.ok) {
+              const arrayBuffer = await imgRes.arrayBuffer();
+              const base64 = Buffer.from(arrayBuffer).toString('base64');
+              const safePath = assetPath.startsWith('/') ? assetPath : '/' + assetPath;
+              generatedFiles[safePath] = `__NOVA_BASE64__${base64}`;
+            }
+          }
+        }
+      }
+    } catch (e) {
+      console.error("[Asset Engine] Failed to process nova-assets.json", e);
+    }
+    delete generatedFiles[manifestKey];
+  }
+
   return NextResponse.json({
     success: true,
     files: generatedFiles,

@@ -327,10 +327,17 @@ Stage cannot show ✓ Completed unless: compile passes, runner valid, preview va
 11. HIGH-END AESTHETICS & PLACEHOLDER INTEGRATION
 ━━━━━━━━━━━━━━━━━━━━
 To maintain premium visual quality without maxing tokens or breaking layouts, you MUST execute styling aggressively during the final Polish/Asset stage.
-PICTURES & ASSETS: You are strictly BANNED from using external image URLs (e.g., Unsplash, Pollinations, or random image links). They break compilation and waste tokens.
-Instead, you MUST generate high-end, perfectly sized, blank placeholder spaces using premium CSS.
-EXCEPTION: If the user provides a specific image (e.g., via the Vision API/base64 string in the prompt) and asks you to insert it, you MUST inject that exact base64 string into the code. The placeholder ban does not apply to user-uploaded images.
-EXAMPLE PLACEHOLDER: \`<div className="w-full aspect-video rounded-2xl bg-gradient-to-br from-slate-800 to-slate-900 border border-white/5 shadow-2xl flex items-center justify-center text-slate-500 font-medium">Hero Image Space</div>\`
+PICTURES & ASSETS: You are strictly BANNED from using external image URLs (e.g., Unsplash, Pollinations, or random links) inside your UI code. They break compilation and waste tokens.
+Instead, you have TWO options:
+OPTION 1 (Manual Upload): Generate high-end, blank placeholder spaces using premium CSS (e.g. \`<div className="aspect-video bg-gradient-to-br from-slate-800 to-slate-900 shadow-2xl flex items-center justify-center">Hero</div>\`).
+OPTION 2 (Auto-Download): Use clean local paths in your UI code (e.g. \`<img src="/public/assets/hero.jpg" />\`). Then, you MUST create a new file named \`nova-assets.json\` that maps these paths to highly detailed image prompts. The backend will automatically download them for you!
+FORMAT for nova-assets.json:
+\`\`\`json
+{
+  "/public/assets/hero.jpg": { "prompt": "luxurious modern office interior, cinematic lighting", "width": 1200, "height": 800 }
+}
+\`\`\`
+EXCEPTION: If the user provides a specific image (via System Directive in the prompt) and asks you to insert it, you MUST use that exact local path in the code. The placeholder ban does not apply to user-uploaded images.
 CSS STYLING: You MUST use premium tailwind utility classes (e.g., backdrop-blur-xl, bg-gradient-to-br, shadow-2xl, hover:scale-105 transition-all). Do NOT leave UIs looking like dry wireframes. Add lush colors, deep contrast, and modern typography to make the layout breathtaking.
 
 ━━━━━━━━━━━━━━━━━━━━
