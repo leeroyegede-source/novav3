@@ -324,11 +324,14 @@ Colors: Blue = processing, Green = completed, Amber = recovery, Red = critical i
 Stage cannot show ✓ Completed unless: compile passes, runner valid, preview valid, checkpoint saved.
 
 ━━━━━━━━━━━━━━━━━━━━
-11. IMAGE + VISUAL ASSET STRATEGY
+11. HIGH-END AESTHETICS & PLACEHOLDER INTEGRATION
 ━━━━━━━━━━━━━━━━━━━━
-Generate images gradually. Never spam giant image prompts.
-Process: placeholder visuals, image direction, lightweight image generation, asset reuse, optimized assets.
-Store: image prompt, dimensions, purpose, style, placement. Use short premium prompts only.
+To maintain premium visual quality without maxing tokens or breaking layouts, you MUST execute styling aggressively during the final Polish/Asset stage.
+PICTURES & ASSETS: You are strictly BANNED from using external image URLs (e.g., Unsplash, Pollinations, or random image links). They break compilation and waste tokens.
+Instead, you MUST generate high-end, perfectly sized, blank placeholder spaces using premium CSS.
+EXCEPTION: If the user provides a specific image (e.g., via the Vision API/base64 string in the prompt) and asks you to insert it, you MUST inject that exact base64 string into the code. The placeholder ban does not apply to user-uploaded images.
+EXAMPLE PLACEHOLDER: \`<div className="w-full aspect-video rounded-2xl bg-gradient-to-br from-slate-800 to-slate-900 border border-white/5 shadow-2xl flex items-center justify-center text-slate-500 font-medium">Hero Image Space</div>\`
+CSS STYLING: You MUST use premium tailwind utility classes (e.g., backdrop-blur-xl, bg-gradient-to-br, shadow-2xl, hover:scale-105 transition-all). Do NOT leave UIs looking like dry wireframes. Add lush colors, deep contrast, and modern typography to make the layout breathtaking.
 
 ━━━━━━━━━━━━━━━━━━━━
 12. UNIVERSAL FILE READING SYSTEM
@@ -354,10 +357,26 @@ Before risky edits: create snapshot. After stable compile: create stable checkpo
 Support: rollback last stage, rollback last feature, compare changes, restore runner files, restore preview configs.
 
 ━━━━━━━━━━━━━━━━━━━━
-15. PREMIUM QUALITY GATE
+15. DESIGN PIPELINE ISOLATION MODE
 ━━━━━━━━━━━━━━━━━━━━
-Before marking UI complete verify: modern? premium? responsive? consistent? strong hierarchy? good spacing? mobile friendly? proper empty/loading/error states?
-If not: continue polish before checkpoint save.
+Design work must be separated from compiler-sensitive implementation work.
+Do not mix: design exploration, layout planning, component styling, image generation, real logic wiring, database/API wiring inside the same unstable stage.
+
+1. DESIGN MUST NOT BE ONE GIANT STEP: Never generate an entire premium UI in one large response. Use pipeline: Brief -> Tokens -> Wireframe -> Shells -> Sections -> Responsive -> Polish -> Asset -> QA -> Compile.
+2. DESIGN BRIEF STAGE: Before coding UI, define app type, target users, brand emotion, visual style, color system, typography direction, etc. Save as DESIGN_BRIEF.md.
+3. DESIGN TOKEN STAGE: Create global tokens first (colors, typography, spacing, radius, shadow, etc).
+4. LAYOUT WIREFRAME STAGE: Create layout structure before visual polish using placeholders only.
+5. COMPONENT SHELL STAGE: Create reusable components before using them (Button, Card, Input, etc).
+6. SECTION-BY-SECTION DESIGN STAGE: Design one section at a time. After each: compile, responsive check, checkpoint save.
+7. RESPONSIVE DESIGN PASS: Run a separate pass fixing mobile spacing, grids, collapse. Do not change business logic.
+8. PREMIUM POLISH PASS: Improve spacing, typography, hierarchy, shadows, gradients, hover states, transitions, empty/loading states.
+9. DESIGN LOCK RULE: Once accepted, do not randomly restyle later pages. New pages must use existing tokens, components, layout.
+10. DESIGN MANIFEST SYSTEM: Track active colors, typography, spacing, components in DESIGN_MANIFEST.json. Read it before building new UI.
+11. DESIGN FAILURE SAFETY: If design stops midway: keep last stable UI, do not apply partial broken design, save as draft, resume from checkpoint.
+12. DESIGN CHECKPOINT RULE: Every design stage must end with: app compiles, layout not broken, runner works, preview works, responsive checked, checkpoint saved. If not: rollback.
+13. LOW-CREDIT DESIGN MODE: If tokens low: reuse components, polish only visible sections, delay image generation, use gradients, apply smaller patches.
+14. DESIGN QUALITY GATE: Before marking complete verify: consistent spacing/typography/components, clean mobile layout, premium hierarchy. If UI generic: do not mark complete.
+15. FINAL RULE: Design is complete only when: system exists, layout consistent, components reusable, passes complete, compile passes, checkpoint saved.
 
 ━━━━━━━━━━━━━━━━━━━━
 16. FINAL NON-NEGOTIABLE RULES
@@ -431,7 +450,11 @@ ${JSON.stringify(request.context.omittedFiles || [], null, 2)}
           data: match[2]
         }
       });
-      console.log("[Vision Agent] Injected image payload into prompt.");
+      userContent.push({
+        type: "text",
+        text: `\n\n[SYSTEM DIRECTIVE]: I have attached a local image to this prompt. You MUST inject this exact string as the image source in the code: \n${request.context.imageBase64}\nDo NOT use a blank placeholder for this specific image.`
+      });
+      console.log("[Vision Agent] Injected image payload and base64 string into prompt.");
     }
   }
 
@@ -457,7 +480,7 @@ ${JSON.stringify(request.context.omittedFiles || [], null, 2)}
       const activeGeminiKey = customApiKey || process.env.GEMINI_API_KEY;
       if (!activeGeminiKey) throw new Error("Missing Gemini API Key. Please add it in Settings or your .env file.");
 
-      const modelId = aiModel.includes('gemini') ? aiModel : 'gemini-2.5-flash';
+      const modelId = (aiModel === 'gemini-free' || !aiModel.includes('gemini')) ? 'gemini-2.5-flash' : aiModel;
       const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelId}:generateContent?key=${activeGeminiKey}`;
       
       const contents = anthropicMessages.map(m => {
@@ -545,7 +568,7 @@ Structure:
       if (aiModel.includes('gemini')) {
         const activeGeminiKey = customApiKey || process.env.GEMINI_API_KEY;
         if (activeGeminiKey) {
-          const modelId = aiModel.includes('gemini') ? aiModel : 'gemini-2.5-flash';
+          const modelId = (aiModel === 'gemini-free' || !aiModel.includes('gemini')) ? 'gemini-2.5-flash' : aiModel;
           const geminiRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${modelId}:generateContent?key=${activeGeminiKey}`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },

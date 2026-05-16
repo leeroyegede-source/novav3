@@ -4,6 +4,18 @@ import { VersionManager } from '@/lib/memory/versionManager';
 import { ProjectMemory } from '@/lib/memory/projectMemory';
 import { LocalDB, STORE_CHAT } from '@/lib/storage/indexedDB';
 
+const renderStatus = (statusStr?: string) => {
+  if (!statusStr) return <span className="text-slate-500">not run</span>;
+  const s = statusStr.toLowerCase();
+  if (s.includes('pass') || s.includes('ok') || s.includes('verif') || s.includes('success') || s.includes('saved')) {
+    return <span className="text-emerald-400 font-bold">Passed</span>;
+  }
+  if (s.includes('not run') || s.includes('not check') || s.includes('not saved')) {
+    return <span className="text-slate-500">not run</span>;
+  }
+  return <span className="text-rose-400 font-bold">{statusStr}</span>;
+};
+
 export function ChatPanel({ files, setFiles, setLogs, clearChatTrigger, reloadChatTrigger, appMode, onVerifyCompile }: { files: Record<string, string>, setFiles: (f: Record<string, string>) => void, setLogs: (cb: (prev: string[]) => string[]) => void, clearChatTrigger?: number, reloadChatTrigger?: number, appMode?: string, onVerifyCompile?: (files: Record<string, string>) => Promise<{success: boolean, files?: Record<string, string>}> }) {
   const [prompt, setPrompt] = useState("");
   const [messages, setMessages] = useState<{role: string, content: string, reasoning?: string, image?: string}[]>([{ role: 'agent', content: "Welcome to NovaAI! Describe the app you want to build or drop a design screenshot."}]);
@@ -358,9 +370,9 @@ export function ChatPanel({ files, setFiles, setLogs, clearChatTrigger, reloadCh
                  <div className="mt-2 grid grid-cols-2 gap-2 text-[10px]">
                    <div className="bg-slate-950 p-2 rounded border border-slate-800">
                      <span className="font-bold text-slate-500 block mb-1">Status Checks</span>
-                     <div>Runner: <span className={m.structuredResponse.runnerCheck?.includes('pass') ? 'text-emerald-400' : 'text-slate-300'}>{m.structuredResponse.runnerCheck}</span></div>
-                     <div>Preview: <span className={m.structuredResponse.previewCheck?.includes('pass') ? 'text-emerald-400' : 'text-slate-300'}>{m.structuredResponse.previewCheck}</span></div>
-                     <div>Save: <span className={m.structuredResponse.saveCheck?.includes('saved') ? 'text-emerald-400' : 'text-slate-300'}>{m.structuredResponse.saveCheck}</span></div>
+                     <div>Runner: {renderStatus(m.structuredResponse.runnerCheck)}</div>
+                     <div>Preview: {renderStatus(m.structuredResponse.previewCheck)}</div>
+                     <div>Save: {renderStatus(m.structuredResponse.saveCheck)}</div>
                    </div>
                    <div className="bg-slate-950 p-2 rounded border border-slate-800">
                      <span className="font-bold text-slate-500 block mb-1">Safety</span>

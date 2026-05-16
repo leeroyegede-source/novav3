@@ -33,7 +33,7 @@ async function generateExecutionPlan(prompt: string, aiModel: string, apiKey: st
   if (aiModel.includes('gemini')) {
     const geminiKey = apiKey || process.env.GEMINI_API_KEY;
     if (geminiKey) {
-      const modelId = aiModel.includes('gemini') ? aiModel : 'gemini-2.5-flash';
+      const modelId = (aiModel === 'gemini-free' || !aiModel.includes('gemini')) ? 'gemini-2.5-flash' : aiModel;
       const geminiRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${modelId}:generateContent?key=${geminiKey}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -105,7 +105,7 @@ async function runDefaultAIRequest(body: any) {
 
   // Prioritize active file and configs
   const prioritize = (path: string) => path.includes('package.json') || path.includes('config') || path === body.activeFile;
-  
+
   // Sort keys to process priority files first
   const sortedPaths = Object.keys(safeFiles).sort((a, b) => {
     if (prioritize(a) && !prioritize(b)) return -1;
@@ -126,7 +126,7 @@ async function runDefaultAIRequest(body: any) {
   // 3. SLIDING HISTORY WINDOW: Only send last 4 messages
   const history = (body.history || []).slice(-4);
   const imageBase64 = body.imageBase64;
-  
+
   const appMode = body.appMode || "Auto Detect";
   const memory = body.memory || {};
   const isAutoHeal = body.isAutoHeal || false;
@@ -144,8 +144,10 @@ async function runDefaultAIRequest(body: any) {
   // --- THE PLANNER GATEWAY (Agentic State Machine) ---
   let plan: { stage: number | string, task: string }[] = [];
   let originalPlan: { stage: number | string, task: string }[] = [];
-  
-  if (!isAutoHeal) {
+
+  const isDirectEdit = (prompt.includes('Make changes to the') && prompt.includes('element')) || !!imageBase64;
+
+  if (!isAutoHeal && !isDirectEdit) {
     const pLower = prompt.toLowerCase();
     if ((pLower.includes('continue') || pLower.includes('proceed')) && memory.pending_plan && memory.pending_plan.length > 0) {
       console.log("[Planner Pipeline] Resuming paused execution plan...");
@@ -169,29 +171,30 @@ STABLE BUILD MODE RULES (CRITICAL):
 1. Stage 1 MUST ALWAYS explicitly update or create the main entry file for the application so the preview compiler and runner work immediately. Do not leave the original scaffolding untouched in Stage 1.
 2. STUB-FIRST DEVELOPMENT MODE: Stages must follow a strict sequence: Types/Interfaces -> Route Shell -> Placeholder UI -> API Stubs -> Real Logic. Never immediately build full logic.
 3. MODULE EXECUTION RULE: Every stage MUST be independently compilable and executable. Do NOT generate a stage that requires a future stage to compile.
-4. Maximum 4 files per stage. Make tasks microscopic.`;
+4. Maximum 4 files per stage. Make tasks microscopic.
+5. AESTHETICS & IMAGES: If the task involves UI, the final stage MUST explicitly be "Apply premium CSS, typography, hover states, and create beautifully styled blank placeholders for all images to ensure a breathtaking final design."`;
         plan = await generateExecutionPlan(prompt, aiModel, apiKey, sysPrompt);
-        
+
         // --- HARDCODED STAGE 1 INTERCEPTOR ---
         if (plan && plan.length > 0) {
           const entryFileMap: Record<string, string> = {
-             "React / Vite": "src/App.jsx",
-             "Next.js": "pages/index.js or src/app/page.tsx",
-             "Node / Express": "index.js",
-             "Static Website": "index.html",
-             "PHP": "index.php"
+            "React / Vite": "src/App.jsx",
+            "Next.js": "pages/index.js or src/app/page.tsx",
+            "Node / Express": "index.js",
+            "Static Website": "index.html",
+            "PHP": "index.php"
           };
           const targetFiles = entryFileMap[appMode] || "the main entry file (e.g. App.jsx, index.html)";
-          
+
           const stage1Task = plan[0].task.toLowerCase();
           const hasEntryFile = stage1Task.includes('app.') || stage1Task.includes('index.') || stage1Task.includes('page.') || stage1Task.includes('main.');
-          
+
           if (!hasEntryFile) {
             console.log(`[Planner Pipeline] Interceptor: Stage 1 missing entry files. Injecting mandatory edit...`);
             plan[0].task = `[MANDATORY EDIT] Update ${targetFiles} to replace the boilerplate scaffolding with the new layout. AND ALSO: ` + plan[0].task;
           }
         }
-        
+
         originalPlan = [...plan];
       } catch (e) {
         console.error("[Planner Pipeline] Failed to generate plan, falling back to single execution.", e);
@@ -202,11 +205,11 @@ STABLE BUILD MODE RULES (CRITICAL):
   // --- THE EXECUTION LOOP ---
   if (plan.length > 0) {
     console.log(`[Orchestrator] Executing stages autonomously...`);
-    
+
     while (plan.length > 0) {
       const stage = plan[0];
       console.log(`[Orchestrator] Running Stage ${stage.stage}: ${stage.task}`);
-      
+
       const stagePrompt = `STAGE ${stage.stage}: ${stage.task}
 (Original overall goal: ${prompt})
 
@@ -214,7 +217,7 @@ CRITICAL INSTRUCTION: Execute ONLY the exact task for this stage. Do NOT attempt
 
       try {
         const compressedFiles = await compressStageContext(stage.task, generatedFiles, memory, aiModel, apiKey);
-        
+
         const response = await routeToAgent({
           role: routingInfo.selectedRole as any,
           routingInfo,
@@ -245,7 +248,7 @@ Respond in strict JSON ONLY: { "stages": [ {"stage": "${stage.stage}.1", "task":
               finalMessage += `\n\n🔄 **Stage ${stage.stage} Failed & Split**: Automatically breaking it down into smaller sub-stages...`;
               continue;
             }
-          } catch(e) {
+          } catch (e) {
             console.warn("Failed to split stage.", e);
           }
         }
@@ -261,11 +264,11 @@ Respond in strict JSON ONLY: { "stages": [ {"stage": "${stage.stage}.1", "task":
         if (response.fileOperations?.delete) {
           response.fileOperations.delete.forEach((f: string) => delete generatedFiles[f]);
         }
-        
+
         finalMessage += `\n\n✅ **Stage ${stage.stage} Complete**: ${stage.task}\n${response.message}`;
         finalReasoning = response.reasoning;
         finalStructuredResponse = response.structuredResponse || {};
-        
+
         plan.shift(); // remove completed stage
 
         // Stop after EVERY stage to ensure safe compilation checkpoints and prevent timeouts
@@ -293,17 +296,17 @@ Respond in strict JSON ONLY: { "stages": [ {"stage": "${stage.stage}.1", "task":
         }
       }
     }
-    
+
   } else {
     // Standard Single Execution (Small Tasks or Auto-Heal)
     let finalPrompt = prompt;
-    
+
     // --- THE DEDICATED ERROR RECOVERY FLOW ---
     if (isAutoHeal) {
       console.log("[Diagnostics Engine] Analyzing build failure...");
       finalPrompt = await diagnoseBuildError(prompt, finalFiles, aiModel, apiKey);
     }
-    
+
     const response = await routeToAgent({
       role: routingInfo.selectedRole as any,
       routingInfo,
@@ -320,7 +323,7 @@ Respond in strict JSON ONLY: { "stages": [ {"stage": "${stage.stage}.1", "task":
       aiModel,
       apiKey
     });
-    
+
     enforceRunnerContracts(response.fileOperations);
 
     if (response.fileOperations?.create) {
@@ -367,63 +370,63 @@ Respond in strict JSON:
   let jsonStr = "{}";
 
   if (aiModel.includes('gemini')) {
-      const geminiKey = apiKey || process.env.GEMINI_API_KEY;
-      if (geminiKey) {
-          try {
-              const modelId = aiModel.includes('gemini') ? aiModel : 'gemini-2.5-flash';
-              const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${modelId}:generateContent?key=${geminiKey}`, {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({
-                      contents: [{ role: 'user', parts: [{ text: prompt }] }],
-                      generationConfig: { response_mime_type: "application/json" }
-                  })
-              });
-              if (res.ok) {
-                  const data = await res.json();
-                  jsonStr = data.candidates?.[0]?.content?.parts?.[0]?.text || "{}";
-              }
-          } catch(e) {}
-      }
+    const geminiKey = apiKey || process.env.GEMINI_API_KEY;
+    if (geminiKey) {
+      try {
+        const modelId = (aiModel === 'gemini-free' || !aiModel.includes('gemini')) ? 'gemini-2.5-flash' : aiModel;
+        const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${modelId}:generateContent?key=${geminiKey}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            contents: [{ role: 'user', parts: [{ text: prompt }] }],
+            generationConfig: { response_mime_type: "application/json" }
+          })
+        });
+        if (res.ok) {
+          const data = await res.json();
+          jsonStr = data.candidates?.[0]?.content?.parts?.[0]?.text || "{}";
+        }
+      } catch (e) { }
+    }
   } else {
-      const anthropicKey = apiKey || process.env.ANTHROPIC_API_KEY;
-      if (anthropicKey) {
-          try {
-              const res = await fetch('https://api.anthropic.com/v1/messages', {
-                  method: 'POST',
-                  headers: { 'x-api-key': anthropicKey, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
-                  body: JSON.stringify({
-                      model: (aiModel === 'claude-sonnet-4-6' || aiModel === 'claude-haiku-4-6') ? 'claude-haiku-4-6' : 'claude-haiku-4-5',
-                      max_tokens: 1500,
-                      system: "You are the NoVa Context Compressor.",
-                      messages: [{ role: 'user', content: prompt }]
-                  })
-              });
-              if (res.ok) {
-                  const data = await res.json();
-                  jsonStr = data.content?.[0]?.text || "{}";
-              }
-          } catch(e) {}
-      }
+    const anthropicKey = apiKey || process.env.ANTHROPIC_API_KEY;
+    if (anthropicKey) {
+      try {
+        const res = await fetch('https://api.anthropic.com/v1/messages', {
+          method: 'POST',
+          headers: { 'x-api-key': anthropicKey, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
+          body: JSON.stringify({
+            model: (aiModel === 'claude-sonnet-4-6' || aiModel === 'claude-haiku-4-6') ? 'claude-haiku-4-6' : 'claude-haiku-4-5',
+            max_tokens: 1500,
+            system: "You are the NoVa Context Compressor.",
+            messages: [{ role: 'user', content: prompt }]
+          })
+        });
+        if (res.ok) {
+          const data = await res.json();
+          jsonStr = data.content?.[0]?.text || "{}";
+        }
+      } catch (e) { }
+    }
   }
 
   try {
-      const parsed = JSON.parse(jsonStr);
-      if (parsed.required_files && Array.isArray(parsed.required_files)) {
-          const compressedFiles: Record<string, string> = {};
-          for (const f of parsed.required_files) {
-              if (files[f]) compressedFiles[f] = files[f];
-          }
-          // RUNNER CONTRACTS ALWAYS RETAINED
-          const contracts = ['package.json', 'next.config.js', 'vite.config.js', 'index.html', 'index.php', 'src/main.jsx', 'src/App.jsx', 'server.js', 'index.js'];
-          for (const contract of contracts) {
-              const matchedKey = Object.keys(files).find(k => k.includes(contract));
-              if (matchedKey) compressedFiles[matchedKey] = files[matchedKey];
-          }
-          if (Object.keys(compressedFiles).length > 0) return compressedFiles;
+    const parsed = JSON.parse(jsonStr);
+    if (parsed.required_files && Array.isArray(parsed.required_files)) {
+      const compressedFiles: Record<string, string> = {};
+      for (const f of parsed.required_files) {
+        if (files[f]) compressedFiles[f] = files[f];
       }
-  } catch(e) {
-      console.warn("[Context Compressor] Failed, falling back to full context.", e);
+      // RUNNER CONTRACTS ALWAYS RETAINED
+      const contracts = ['package.json', 'next.config.js', 'vite.config.js', 'index.html', 'index.php', 'src/main.jsx', 'src/App.jsx', 'server.js', 'index.js'];
+      for (const contract of contracts) {
+        const matchedKey = Object.keys(files).find(k => k.includes(contract));
+        if (matchedKey) compressedFiles[matchedKey] = files[matchedKey];
+      }
+      if (Object.keys(compressedFiles).length > 0) return compressedFiles;
+    }
+  } catch (e) {
+    console.warn("[Context Compressor] Failed, falling back to full context.", e);
   }
   return files;
 }
@@ -431,7 +434,7 @@ Respond in strict JSON:
 async function diagnoseBuildError(errorPrompt: string, files: Record<string, string>, aiModel: string, apiKey: string) {
   const geminiKey = apiKey || process.env.GEMINI_API_KEY;
   if (!geminiKey) return errorPrompt;
-  
+
   const prompt = `You are the NoVa Diagnostics Agent.
 The build failed or the user reported the following error:
 ---
@@ -445,53 +448,53 @@ Respond in strict JSON:
   let jsonStr = "{}";
 
   if (aiModel.includes('gemini') || aiModel === 'nova-safer') {
-      const geminiKey = apiKey || process.env.GEMINI_API_KEY;
-      if (geminiKey) {
-          try {
-              const modelId = aiModel.includes('gemini') ? aiModel : 'gemini-2.5-flash';
-              const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${modelId}:generateContent?key=${geminiKey}`, {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({
-                      contents: [{ role: 'user', parts: [{ text: prompt }] }],
-                      generationConfig: { response_mime_type: "application/json" }
-                  })
-              });
-              if (res.ok) {
-                  const data = await res.json();
-                  jsonStr = data.candidates?.[0]?.content?.parts?.[0]?.text || "{}";
-              }
-          } catch(e) {}
-      }
+    const geminiKey = apiKey || process.env.GEMINI_API_KEY;
+    if (geminiKey) {
+      try {
+        const modelId = (aiModel === 'gemini-free' || !aiModel.includes('gemini')) ? 'gemini-2.5-flash' : aiModel;
+        const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${modelId}:generateContent?key=${geminiKey}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            contents: [{ role: 'user', parts: [{ text: prompt }] }],
+            generationConfig: { response_mime_type: "application/json" }
+          })
+        });
+        if (res.ok) {
+          const data = await res.json();
+          jsonStr = data.candidates?.[0]?.content?.parts?.[0]?.text || "{}";
+        }
+      } catch (e) { }
+    }
   } else {
-      const anthropicKey = apiKey || process.env.ANTHROPIC_API_KEY;
-      if (anthropicKey) {
-          try {
-              const res = await fetch('https://api.anthropic.com/v1/messages', {
-                  method: 'POST',
-                  headers: { 'x-api-key': anthropicKey, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
-                  body: JSON.stringify({
-                      model: 'claude-opus-4-7',
-                      max_tokens: 1500,
-                      system: "You are the NoVa Diagnostics Agent.",
-                      messages: [{ role: 'user', content: prompt }]
-                  })
-              });
-              if (res.ok) {
-                  const data = await res.json();
-                  jsonStr = data.content?.[0]?.text || "{}";
-              }
-          } catch(e) {}
-      }
+    const anthropicKey = apiKey || process.env.ANTHROPIC_API_KEY;
+    if (anthropicKey) {
+      try {
+        const res = await fetch('https://api.anthropic.com/v1/messages', {
+          method: 'POST',
+          headers: { 'x-api-key': anthropicKey, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
+          body: JSON.stringify({
+            model: 'claude-opus-4-7',
+            max_tokens: 1500,
+            system: "You are the NoVa Diagnostics Agent.",
+            messages: [{ role: 'user', content: prompt }]
+          })
+        });
+        if (res.ok) {
+          const data = await res.json();
+          jsonStr = data.content?.[0]?.text || "{}";
+        }
+      } catch (e) { }
+    }
   }
 
   try {
-      const parsed = JSON.parse(jsonStr);
-      if (parsed.repair_plan) {
-          return `[AUTO-HEAL DIAGNOSTICS APPLIED]\nThe Diagnostics Engine analyzed the error and prescribed this repair plan. Execute it strictly:\n\n${parsed.repair_plan}\n\nOriginal Error:\n${errorPrompt}`;
-      }
-  } catch(e) {
-      console.warn("[Diagnostics Engine] Failed.", e);
+    const parsed = JSON.parse(jsonStr);
+    if (parsed.repair_plan) {
+      return `[AUTO-HEAL DIAGNOSTICS APPLIED]\nThe Diagnostics Engine analyzed the error and prescribed this repair plan. Execute it strictly:\n\n${parsed.repair_plan}\n\nOriginal Error:\n${errorPrompt}`;
+    }
+  } catch (e) {
+    console.warn("[Diagnostics Engine] Failed.", e);
   }
   return errorPrompt;
 }

@@ -62,7 +62,7 @@ export async function POST(req: Request) {
 
         // Inject Auto-Heal Spy Script
         let finalContent = content as string;
-        if (typeof finalContent === 'string' && (safePath.endsWith('.html') || safePath.endsWith('_app.js') || safePath.endsWith('_document.js'))) {
+        if (typeof finalContent === 'string' && (safePath.endsWith('.html') || safePath.endsWith('.php') || safePath.endsWith('_app.js') || safePath.endsWith('_document.js'))) {
             const spyScript = `
 <script>
   window.onerror = function(message, source, lineno, colno, error) {
@@ -123,7 +123,7 @@ export async function POST(req: Request) {
   }, true);
 </script>
 `;
-            if (safePath.endsWith('.html') && /<head[^>]*>/i.test(finalContent)) {
+            if ((safePath.endsWith('.html') || safePath.endsWith('.php')) && /<head[^>]*>/i.test(finalContent)) {
                 finalContent = finalContent.replace(/(<head[^>]*>)/i, `$1` + spyScript);
             } else if ((safePath.endsWith('_app.js') || safePath.endsWith('_document.js')) && finalContent.includes('return')) {
                 // Next.js injection is trickier without breaking React tree, so we skip it for now or do it via next.config.js later
