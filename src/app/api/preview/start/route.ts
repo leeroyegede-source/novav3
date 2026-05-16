@@ -172,6 +172,24 @@ export async function POST(req: Request) {
       else if (typeof pkg === 'string' && pkg.includes('"next"')) runtime = 'nextjs';
       else runtime = 'vite';
     }
+    
+    // Auto-Heal: Next.js runner crashes if next.config.ts is present. Forcibly rename it to .js.
+    if (runtime === 'nextjs') {
+      const nextConfigTsPath = path.join(workspaceDir, 'next.config.ts');
+      const nextConfigJsPath = path.join(workspaceDir, 'next.config.js');
+      if (fs.existsSync(nextConfigTsPath)) {
+        console.log("Auto-healing: Renaming next.config.ts to next.config.js to prevent runner crash");
+        const content = fs.readFileSync(nextConfigTsPath, 'utf8');
+        fs.writeFileSync(nextConfigJsPath, content.replace(/import type/g, '// import type').replace(/: NextConfig/g, ''));
+        fs.unlinkSync(nextConfigTsPath);
+        
+        // Also wipe .next cache so it doesn't remember the TS config
+        const nextCachePath = path.join(workspaceDir, '.next');
+        if (fs.existsSync(nextCachePath)) {
+          fs.rmSync(nextCachePath, { recursive: true, force: true });
+        }
+      }
+    }
 
     const result = await LocalRunner.startContainer({
       projectId,

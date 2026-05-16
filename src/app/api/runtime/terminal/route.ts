@@ -18,10 +18,31 @@ export async function POST(req: Request) {
     if (!fs.existsSync(workspaceDir)) {
       fs.mkdirSync(workspaceDir, { recursive: true });
     }
+    
+    // Auto-heal next.config.ts permanently
+    const globalNextTs = path.join(workspaceDir, 'next.config.ts');
+    if (fs.existsSync(globalNextTs)) {
+      const content = fs.readFileSync(globalNextTs, 'utf8');
+      fs.writeFileSync(path.join(workspaceDir, 'next.config.js'), content.replace(/import type/g, '// import type').replace(/: NextConfig/g, ''));
+      fs.unlinkSync(globalNextTs);
+      const nextCache = path.join(workspaceDir, '.next');
+      if (fs.existsSync(nextCache)) fs.rmSync(nextCache, { recursive: true, force: true });
+    }
 
     // Sync files to the workspace before running the command
     if (files) {
-      for (const [filePath, content] of Object.entries(files)) {
+      for (let [filePath, content] of Object.entries(files)) {
+        // Auto-heal next.config.ts to prevent Next.js runner crashes
+        if (filePath.endsWith('next.config.ts')) {
+          const oldPath = path.join(workspaceDir, filePath.startsWith('/') ? filePath.slice(1) : filePath);
+          if (fs.existsSync(oldPath)) fs.unlinkSync(oldPath);
+          
+          filePath = filePath.replace('next.config.ts', 'next.config.js');
+          if (typeof content === 'string') {
+            content = content.replace(/import type/g, '// import type').replace(/: NextConfig/g, '');
+          }
+        }
+        
         // Remove leading slash for safe pathing
         const safePath = filePath.startsWith('/') ? filePath.slice(1) : filePath;
         const fullPath = path.join(workspaceDir, safePath);

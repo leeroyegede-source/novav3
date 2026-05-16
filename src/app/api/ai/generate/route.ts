@@ -26,6 +26,26 @@ function enforceRunnerContracts(operations: any) {
   if (operations?.delete) {
     operations.delete = operations.delete.filter((f: string) => !critical.some(c => f.endsWith(c)));
   }
+  
+  // Hardcode intercept for Next.js scaffolding crash (Runner does not support next.config.ts)
+  if (operations?.create) {
+    const keys = Object.keys(operations.create);
+    for (const k of keys) {
+      if (k.endsWith('next.config.ts')) {
+        const newKey = k.replace('next.config.ts', 'next.config.js');
+        operations.create[newKey] = operations.create[k];
+        delete operations.create[k];
+      }
+    }
+  }
+  
+  if (operations?.update) {
+    for (const update of operations.update) {
+      if (update.file && update.file.endsWith('next.config.ts')) {
+        update.file = update.file.replace('next.config.ts', 'next.config.js');
+      }
+    }
+  }
 }
 
 async function generateExecutionPlan(prompt: string, aiModel: string, apiKey: string, sysPrompt: string) {
@@ -137,6 +157,21 @@ async function runDefaultAIRequest(body: any) {
   const routingInfo = await determineRoute(prompt, isAutoHeal);
 
   let generatedFiles = { ...safeFiles };
+    
+  // Auto-heal next.config.ts globally for Next.js crashes
+  const genFileKeys = Object.keys(generatedFiles);
+  for (const key of genFileKeys) {
+    if (key.endsWith('next.config.ts')) {
+      const newKey = key.replace('next.config.ts', 'next.config.js');
+      let content = generatedFiles[key];
+      if (typeof content === 'string') {
+        content = content.replace(/import type/g, '// import type').replace(/: NextConfig/g, '');
+      }
+      generatedFiles[newKey] = content;
+      delete generatedFiles[key];
+    }
+  }
+
   let finalMessage = "";
   let finalReasoning = "";
   let finalStructuredResponse: any = null;
