@@ -24,7 +24,7 @@ export function ChatPanel({ files, setFiles, setLogs, clearChatTrigger, reloadCh
   const [timelineIndex, setTimelineIndex] = useState(0);
   const [attachedImage, setAttachedImage] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const chatInputRef = useRef<HTMLInputElement>(null);
+  const chatInputRef = useRef<HTMLTextAreaElement>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
   const hiddenSubmitRef = useRef<HTMLButtonElement>(null);
   const [isHydrated, setIsHydrated] = useState(false);
@@ -45,6 +45,12 @@ export function ChatPanel({ files, setFiles, setLogs, clearChatTrigger, reloadCh
       window.removeEventListener('nova-resume-execution', handleResume);
     };
   }, []);
+
+  useEffect(() => {
+    if (prompt === '' && chatInputRef.current) {
+      chatInputRef.current.style.height = '46px';
+    }
+  }, [prompt]);
 
   useEffect(() => {
     const initStorage = async () => {
@@ -388,7 +394,7 @@ export function ChatPanel({ files, setFiles, setLogs, clearChatTrigger, reloadCh
             )}
 
             {m.image && <img src={m.image} alt="User Upload" className="max-h-32 rounded mb-2 border border-slate-700" />}
-            {m.content}
+            <div className="whitespace-pre-wrap font-sans">{m.content}</div>
           </div>
         ))}
         {isGenerating && (
@@ -477,15 +483,30 @@ export function ChatPanel({ files, setFiles, setLogs, clearChatTrigger, reloadCh
           >
             <ImageIcon className="w-4 h-4" />
           </button>
-          <input 
-            type="text" 
+          <textarea 
             ref={chatInputRef}
             value={prompt} 
-            onChange={(e) => setPrompt(e.target.value)} 
+            onChange={(e) => {
+              setPrompt(e.target.value);
+              if (e.target.value === '') {
+                e.target.style.height = '46px';
+              } else {
+                e.target.style.height = '46px'; // reset to calculate accurately
+                e.target.style.height = `${Math.min(e.target.scrollHeight, 192)}px`; // 192px is roughly 8 lines
+              }
+            }}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                hiddenSubmitRef.current?.click();
+              }
+            }}
             placeholder="Build me a... or hold ALT + click an element to select it"
-            className="w-full bg-white/[0.05] border border-white/10 rounded-lg pl-10 pr-10 py-3 text-sm focus:outline-none focus:border-indigo-500 transition-colors text-slate-200 placeholder:text-slate-500 backdrop-blur-md shadow-inner"
+            className={`w-full bg-white/[0.05] border border-white/10 rounded-lg pl-10 pr-10 py-3 text-sm focus:outline-none focus:border-indigo-500 transition-all duration-200 text-slate-200 placeholder:text-slate-500 backdrop-blur-md shadow-inner resize-none overflow-y-auto chat-scrollbar ${!prompt ? 'whitespace-nowrap overflow-hidden' : ''}`}
+            rows={1}
+            style={{ height: '46px' }}
           />
-          <button type="submit" disabled={isGenerating} className="absolute right-2 top-2.5 p-1 text-slate-400 hover:text-indigo-400 disabled:opacity-50">
+          <button type="submit" disabled={isGenerating} className="absolute right-2 top-2.5 p-1 text-slate-400 hover:text-indigo-400 disabled:opacity-50 z-10">
             <Send className="w-4 h-4" />
           </button>
           <button type="submit" ref={hiddenSubmitRef} className="hidden" />
