@@ -87,7 +87,7 @@ export async function POST(req: Request) {
 }
 
 async function runDefaultAIRequest(body: any) {
-  const prompt = body.prompt || "";
+  let prompt = body.prompt || "";
   // 1. HARD BLOCK: Strip massive generated directories
   const safeFiles: Record<string, string> = {};
   const ignoredPatterns = ['node_modules/', '.next/', '.git/', 'dist/', 'build/', 'FULL_CODE_DUMP.txt'];
