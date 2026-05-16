@@ -141,6 +141,16 @@ async function runDefaultAIRequest(body: any) {
   let finalReasoning = "";
   let finalStructuredResponse: any = null;
 
+  if (imageBase64) {
+    const match = imageBase64.match(/^data:image\/([a-zA-Z]+);base64,(.+)$/);
+    if (match) {
+      const ext = match[1] === 'jpeg' ? 'jpg' : match[1];
+      const assetPath = `/public/assets/upload_${Date.now()}.${ext}`;
+      generatedFiles[assetPath] = `__NOVA_BASE64__${match[2]}`;
+      prompt += `\n\n[SYSTEM DIRECTIVE]: I have uploaded an image. I automatically saved it to the project at \`${assetPath}\`. You MUST use this exact local asset path as the image source in your code.`;
+    }
+  }
+
   // --- THE PLANNER GATEWAY (Agentic State Machine) ---
   let plan: { stage: number | string, task: string }[] = [];
   let originalPlan: { stage: number | string, task: string }[] = [];

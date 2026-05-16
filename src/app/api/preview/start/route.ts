@@ -131,7 +131,12 @@ export async function POST(req: Request) {
             }
         }
 
-        fs.writeFileSync(fullPath, finalContent, 'utf-8');
+        if (typeof finalContent === 'string' && finalContent.startsWith('__NOVA_BASE64__')) {
+            const base64Data = finalContent.replace('__NOVA_BASE64__', '');
+            fs.writeFileSync(fullPath, Buffer.from(base64Data, 'base64'));
+        } else {
+            fs.writeFileSync(fullPath, finalContent, 'utf-8');
+        }
       }
 
       // Git-Backed Checkpointing

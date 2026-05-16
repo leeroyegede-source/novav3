@@ -450,11 +450,7 @@ ${JSON.stringify(request.context.omittedFiles || [], null, 2)}
           data: match[2]
         }
       });
-      userContent.push({
-        type: "text",
-        text: `\n\n[SYSTEM DIRECTIVE]: I have attached a local image to this prompt. You MUST inject this exact string as the image source in the code: \n${request.context.imageBase64}\nDo NOT use a blank placeholder for this specific image.`
-      });
-      console.log("[Vision Agent] Injected image payload and base64 string into prompt.");
+      console.log("[Vision Agent] Injected image payload into prompt.");
     }
   }
 
