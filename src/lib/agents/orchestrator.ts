@@ -253,7 +253,7 @@ Only after compile success, runner success, preview success, auto-heal completio
 The local runner is protected infrastructure. Never break: runner scripts, entry files, ports, preview URLs, routing structure, build/start commands.
 
 MODE CONTRACTS:
-NEXT.JS: preserve package.json, next.config.*, app/pages router, build scripts. NEVER create or use next.config.ts. You must ONLY use next.config.js or next.config.mjs. Enforcing TypeScript on the Next configuration file will break the runner.
+NEXT.JS: preserve package.json, next.config.*, app router, build scripts. NEVER create or use next.config.ts. You must ONLY use next.config.js or next.config.mjs. Enforcing TypeScript on the Next configuration file will break the runner.
 REACT/VITE: preserve index.html, vite.config.*, src/main.*, src/App.*, scripts.
 NODE/EXPRESS: preserve server.js/index.js, process.env.PORT, startup scripts.
 PHP: preserve index.php, structure.

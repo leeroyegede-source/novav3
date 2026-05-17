@@ -40,9 +40,12 @@ function enforceRunnerContracts(operations: any) {
   }
   
   if (operations?.update) {
-    for (const update of operations.update) {
-      if (update.file && update.file.endsWith('next.config.ts')) {
-        update.file = update.file.replace('next.config.ts', 'next.config.js');
+    const updateKeys = Object.keys(operations.update);
+    for (const k of updateKeys) {
+      if (k.endsWith('next.config.ts')) {
+        const newKey = k.replace('next.config.ts', 'next.config.js');
+        operations.update[newKey] = operations.update[k];
+        delete operations.update[k];
       }
     }
   }
@@ -224,7 +227,7 @@ STABLE BUILD MODE RULES (CRITICAL):
         if (plan && plan.length > 0) {
           const entryFileMap: Record<string, string> = {
             "React / Vite": "src/App.jsx",
-            "Next.js": "pages/index.js or src/app/page.tsx",
+            "Next.js": "src/app/page.tsx",
             "Node / Express": "index.js",
             "Static Website": "index.html",
             "PHP": "index.php"

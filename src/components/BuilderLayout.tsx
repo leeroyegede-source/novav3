@@ -467,12 +467,13 @@ export function BuilderLayout({ userEmail }: { userEmail?: string }) {
     let initialActiveFile = "/App.js";
     
     if (newProjectMode === "Next.js") {
-      initialActiveFile = "/pages/index.js";
+      initialActiveFile = "/src/app/page.js";
       newFiles = {
-        "/pages/index.js": `export default function Home() {\n  return <div className="min-h-screen bg-slate-900 text-white flex items-center justify-center font-bold text-2xl text-center p-8">\\n    <div className="flex flex-col items-center gap-6">\\n      <div className="w-16 h-16 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin"></div>\\n      <p>Welcome to Nova AI. Your project will be displayed here shortly.</p>\\n    </div>\\n  </div>;\n}`,
-        "/pages/_app.js": `import '../styles/globals.css';\n\nexport default function App({ Component, pageProps }) {\n  return <Component {...pageProps} />;\n}`,
-        "/styles/globals.css": `@tailwind base;\n@tailwind components;\n@tailwind utilities;\n\nbody { background-color: #0f172a; color: white; }`,
-        "/package.json": `{\n  "name": "nova-nextjs",\n  "version": "1.0.0",\n  "private": true,\n  "scripts": {\n    "dev": "next dev",\n    "build": "next build",\n    "start": "next start"\n  },\n  "dependencies": {\n    "next": "14.2.5",\n    "react": "18.3.1",\n    "react-dom": "18.3.1"\n  },\n  "devDependencies": {\n    "autoprefixer": "^10.4.19",\n    "postcss": "^8.4.39",\n    "tailwindcss": "^3.4.7"\n  }\n}`
+        "/src/app/page.js": `export default function Home() {\n  return <div className="min-h-screen bg-slate-900 text-white flex items-center justify-center font-bold text-2xl text-center p-8">\\n    <div className="flex flex-col items-center gap-6">\\n      <div className="w-16 h-16 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin"></div>\\n      <p>Welcome to Nova AI. Your project will be displayed here shortly.</p>\\n    </div>\\n  </div>;\n}`,
+        "/src/app/layout.js": `import './globals.css';\n\nexport default function RootLayout({ children }) {\n  return (\n    <html lang="en">\n      <body>{children}</body>\n    </html>\n  );\n}`,
+        "/src/app/globals.css": `@tailwind base;\n@tailwind components;\n@tailwind utilities;\n\nbody { background-color: #0f172a; color: white; }`,
+        "/package.json": `{\n  "name": "nova-nextjs",\n  "version": "1.0.0",\n  "private": true,\n  "scripts": {\n    "dev": "next dev",\n    "build": "next build",\n    "start": "next start"\n  },\n  "dependencies": {\n    "next": "16.2.6",\n    "react": "^19.0.0",\n    "react-dom": "^19.0.0"\n  },\n  "devDependencies": {\n    "autoprefixer": "^10.4.19",\n    "postcss": "^8.4.39",\n    "tailwindcss": "^3.4.7"\n  }\n}`,
+        "/next.config.js": `/** @type {import('next').NextConfig} */\nconst nextConfig = {};\n\nmodule.exports = nextConfig;`
       };
     } else if (newProjectMode === "React / Vite") {
       initialActiveFile = "/src/App.jsx";
@@ -620,6 +621,28 @@ export function BuilderLayout({ userEmail }: { userEmail?: string }) {
          const healResult = await executeAutoHealPipeline(errStr, 'compile-error', newFiles);
          return healResult;
       } else {
+         // Wait 4 seconds for Next.js to actually compile the code
+         setLogs(prev => [...prev, `[SYSTEM] Waiting 4s for compiler validation...`]);
+         await new Promise(resolve => setTimeout(resolve, 4000));
+         
+         // Fetch the actual terminal logs from the runner
+         const logRes = await fetch('/api/preview/logs?projectId=nova-project-1');
+         if (logRes.ok) {
+           const logData = await logRes.json();
+           const logsStr = (logData.logs || []).join('\n');
+           
+           // Check if the compiler crashed
+           const hasError = logsStr.includes('Failed to compile') || logsStr.includes('SyntaxError') || logsStr.includes('Module not found') || logsStr.includes('ReferenceError') || logsStr.includes('TypeError') || logsStr.includes('Type error:') || logsStr.includes('[PROCESS ERROR]');
+           
+           if (hasError) {
+             setLogs(prev => [...prev, `[ERROR] Compiler caught an error! Extracting logs and triggering Auto-Heal...`]);
+             // Extract the last 20 lines of the log which usually contain the exact error
+             const errorLines = (logData.logs || []).slice(-20).join('\n');
+             const healResult = await executeAutoHealPipeline(errorLines, 'compile-error', newFiles);
+             return healResult;
+           }
+         }
+         
          setLogs(prev => [...prev, `[SYSTEM] Compile check passed!`]);
          return { success: true, files: newFiles };
       }
