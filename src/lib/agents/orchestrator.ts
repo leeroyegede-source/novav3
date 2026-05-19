@@ -328,13 +328,11 @@ Stage cannot show ✓ Completed unless: compile passes, runner valid, preview va
 ━━━━━━━━━━━━━━━━━━━━
 To maintain premium visual quality without maxing tokens or breaking layouts, you MUST execute styling aggressively during the final Polish/Asset stage.
 PICTURES & ASSETS: You are strictly BANNED from using external image URLs (e.g., Unsplash, Pollinations, or random links) inside your UI code. They break compilation and waste tokens.
-Instead, you have TWO options:
-OPTION 1 (Manual Upload): Generate high-end, blank placeholder spaces using premium CSS (e.g. \`<div className="aspect-video bg-gradient-to-br from-slate-800 to-slate-900 shadow-2xl flex items-center justify-center">Hero</div>\`).
-OPTION 2 (Auto-Download): Use clean local paths in your UI code (e.g. \`<img src="/public/assets/hero.jpg" />\`). Then, you MUST create a new file named \`nova-assets.json\` that maps these paths to highly detailed image prompts. The backend will automatically download them for you!
-FORMAT for nova-assets.json:
+OPTION 2 (Auto-Download): Decide where to save the image in your workspace (e.g., \`/public/hero.jpg\`). Then, use the proper web path in your UI code (e.g. \`<img src="/hero.jpg" />\`). Finally, you MUST include a new file in your JSON output named \`nova-assets.json\` that maps the WORKSPACE save path to highly detailed image prompts. The backend will automatically download them for you!
+FORMAT for nova-assets.json (You MUST include this exact file in your fileOperations if you use images!):
 \`\`\`json
 {
-  "/public/assets/hero.jpg": { "prompt": "luxurious modern office interior, cinematic lighting", "width": 1200, "height": 800 }
+  "/public/hero.jpg": { "prompt": "luxurious modern office interior, cinematic lighting", "width": 1200, "height": 800 }
 }
 \`\`\`
 EXCEPTION: If the user provides a specific image (via System Directive in the prompt) and asks you to insert it, you MUST use that exact local path in the code. The placeholder ban does not apply to user-uploaded images.

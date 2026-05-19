@@ -105,9 +105,11 @@ export async function POST(req: Request) {
     const encoder = new TextEncoder();
     const stream = new ReadableStream({
       async start(controller) {
-        const onProgress = (msg: string) => {
+        const onProgress = (msg: string, type: string = 'progress', data?: any) => {
           try {
-            controller.enqueue(encoder.encode(JSON.stringify({ type: 'progress', message: msg }) + '\n'));
+            const payload: any = { type, message: msg };
+            if (data) payload.data = data;
+            controller.enqueue(encoder.encode(JSON.stringify(payload) + '\n'));
           } catch(e) {}
         };
         try {
@@ -127,7 +129,7 @@ export async function POST(req: Request) {
   }
 }
 
-async function runDefaultAIRequest(body: any, onProgress?: (msg: string) => void) {
+async function runDefaultAIRequest(body: any, onProgress?: (msg: string, type?: string, data?: any) => void) {
   let prompt = body.prompt || "";
   // 1. HARD BLOCK: Strip massive generated directories
   const safeFiles: Record<string, string> = {};
@@ -202,8 +204,9 @@ async function runDefaultAIRequest(body: any, onProgress?: (msg: string) => void
     if (match) {
       const ext = match[1] === 'jpeg' ? 'jpg' : match[1];
       const assetPath = `/public/assets/upload_${Date.now()}.${ext}`;
+      const webPath = `/assets/upload_${Date.now()}.${ext}`;
       generatedFiles[assetPath] = `__NOVA_BASE64__${match[2]}`;
-      prompt += `\n\n[SYSTEM DIRECTIVE]: I have uploaded an image. I automatically saved it to the project at \`${assetPath}\`. You MUST use this exact local asset path as the image source in your code.`;
+      prompt += `\n\n[SYSTEM DIRECTIVE]: I have uploaded an image. I automatically saved it to the project at \`${assetPath}\`. You MUST use \`${webPath}\` as the image source in your code.`;
     }
   }
 
@@ -283,8 +286,11 @@ ${isExistingApp ? "1. EXISTING APP DETECTED: Do NOT overwrite the core architect
 
   // --- THE EXECUTION LOOP ---
   if (plan.length > 0) {
-    if (onProgress) onProgress("[ORCHESTRATOR] Executing stages autonomously...");
-    console.log(`[Orchestrator] Executing stages autonomously...`);
+    if (onProgress) {
+      onProgress("[ORCHESTRATOR] Execution plan finalized.", 'plan_created', { pendingPlan: plan, fullPlan: originalPlan });
+      onProgress("[ORCHESTRATOR] Executing stages...");
+    }
+    console.log(`[Orchestrator] Executing stages...`);
 
     while (plan.length > 0) {
       const stage = plan[0];
@@ -298,7 +304,7 @@ CRITICAL INSTRUCTION: Execute ONLY the exact task for this stage. Do NOT attempt
 
       try {
         const compressedFiles = await compressStageContext(stage.task, generatedFiles, memory, aiModel, apiKey);
-
+  
         const response = await routeToAgent({
           role: routingInfo.selectedRole as any,
           routingInfo,
@@ -352,13 +358,17 @@ Respond in strict JSON ONLY: { "stages": [ {"stage": "${stage.stage}.1", "task":
 
         plan.shift(); // remove completed stage
 
-        // Stop after EVERY stage to ensure safe compilation checkpoints and prevent timeouts
+        // Stream mid-plan files back to the client for Continuous Evaluation
+        if (onProgress) {
+          onProgress(`[SYSTEM] Stage ${stage.stage} complete. Streaming intermediate files...`, 'stage_complete', generatedFiles);
+        }
+
         if (plan.length > 0) {
           const nextStage = plan[0];
-          finalMessage += `\n\n⏸️ **Stage Complete. Compilation Checkpoint Reached.**\nReady for Next Stage: ${nextStage.task}\nReply "proceed" or "continue" to execute the next stage.`;
+          finalMessage += `\n\n⏸️ **Stage Complete.**\nWaiting for your permission to proceed to Next Stage: ${nextStage.task}\nReply "continue" to proceed.`;
           finalStructuredResponse.pendingPlan = plan;
           finalStructuredResponse.fullPlan = originalPlan;
-          break;
+          break; // Manual step-by-step mode - requires user permission to continue
         } else {
           finalMessage += `\n\n🎉 **All Stages Complete!**`;
           finalStructuredResponse.pendingPlan = [];

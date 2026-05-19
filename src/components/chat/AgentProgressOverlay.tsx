@@ -159,8 +159,10 @@ export function AgentProgressOverlay() {
   }
 
   return (
-    <div className="fixed top-6 right-6 z-[9999] transition-all duration-500 ease-out font-sans">
-      <div className={`backdrop-blur-3xl bg-slate-900/95 border ${themeBorder} rounded-2xl overflow-hidden shadow-2xl transition-all duration-500 ${isMinimized ? 'w-72' : 'w-96'}`}>
+    <div className="fixed top-6 right-6 z-[9999] transition-all duration-500 ease-out font-sans group">
+      {/* Animated subtle glow */}
+      <div className={`absolute -inset-1 bg-gradient-to-r ${themeGradient} rounded-2xl blur opacity-20 group-hover:opacity-30 transition duration-1000 pointer-events-none`}></div>
+      <div className={`relative backdrop-blur-[32px] bg-black/80 border border-white/10 rounded-2xl overflow-hidden shadow-[0_0_50px_rgba(0,0,0,0.5)] transition-all duration-500 ${isMinimized ? 'w-72' : 'w-96'}`}>
         
         {/* Progress Bar Top */}
         <div className="h-1.5 w-full bg-slate-800/50 relative overflow-hidden">
@@ -171,7 +173,7 @@ export function AgentProgressOverlay() {
         </div>
 
         {/* Header */}
-        <div className="flex items-center justify-between p-3 border-b border-white/5 bg-white/[0.02]">
+        <div className="flex items-center justify-between p-3 border-b border-white/5 bg-gradient-to-r from-white/[0.05] to-transparent">
           <div className="flex flex-col">
             <div className="flex items-center gap-2">
               <Activity className={`w-3.5 h-3.5 text-${themeColor}-400 ${!isComplete && !hasError ? 'animate-pulse' : ''}`} />
@@ -212,15 +214,18 @@ export function AgentProgressOverlay() {
             </div>
 
             {/* Stages List */}
-            <div className="space-y-1.5 max-h-[25vh] overflow-y-auto custom-scrollbar pr-1">
+            <div className="space-y-1 max-h-[25vh] overflow-y-auto custom-scrollbar pr-1 relative">
+              {/* Optional timeline line connecting nodes */}
+              <div className="absolute left-4 top-2 bottom-2 w-px bg-white/5 z-0" />
+              
               {stages.map((stage) => (
-                <div key={stage.id} className={`flex items-start gap-3 p-2 rounded-lg transition-colors ${stage.status === 'running' ? 'bg-indigo-500/10 border border-indigo-500/20' : stage.status === 'recovery' ? 'bg-amber-500/10 border border-amber-500/20' : stage.status === 'failed' ? 'bg-rose-500/10 border border-rose-500/20' : 'hover:bg-white/5 border border-transparent'}`}>
-                  <div className="mt-0.5 shrink-0">
-                    {stage.status === 'completed' && <CheckCircle2 className="w-4 h-4 text-emerald-400" />}
-                    {stage.status === 'pending' && <CircleDashed className="w-4 h-4 text-slate-600" />}
-                    {stage.status === 'running' && <Loader2 className="w-4 h-4 text-indigo-400 animate-spin" />}
-                    {stage.status === 'recovery' && <AlertTriangle className="w-4 h-4 text-amber-400 animate-pulse" />}
-                    {stage.status === 'failed' && <X className="w-4 h-4 text-rose-400" />}
+                <div key={stage.id} className={`relative z-10 flex items-start gap-3 p-2 rounded-xl transition-all duration-300 ${stage.status === 'running' ? 'bg-indigo-500/10 border border-indigo-500/30 shadow-[0_0_15px_rgba(99,102,241,0.15)] scale-[1.02]' : stage.status === 'recovery' ? 'bg-amber-500/10 border border-amber-500/30' : stage.status === 'failed' ? 'bg-rose-500/10 border border-rose-500/30' : 'hover:bg-white/5 border border-transparent'}`}>
+                  <div className={`mt-0.5 shrink-0 w-5 h-5 rounded-full flex items-center justify-center bg-black/50 border ${stage.status === 'completed' ? 'border-emerald-500/50 text-emerald-400' : stage.status === 'running' ? 'border-indigo-500 text-indigo-400 shadow-[0_0_10px_rgba(99,102,241,0.5)]' : 'border-slate-700 text-slate-500'}`}>
+                    {stage.status === 'completed' && <CheckCircle2 className="w-3.5 h-3.5" />}
+                    {stage.status === 'pending' && <CircleDashed className="w-3 h-3" />}
+                    {stage.status === 'running' && <Loader2 className="w-3 h-3 animate-spin" />}
+                    {stage.status === 'recovery' && <AlertTriangle className="w-3 h-3 text-amber-400 animate-pulse" />}
+                    {stage.status === 'failed' && <X className="w-3 h-3 text-rose-400" />}
                   </div>
                   <div className="flex flex-col flex-1 min-w-0">
                     <span className={`text-xs font-medium ${stage.status === 'completed' ? 'text-slate-400 line-through' : stage.status === 'failed' ? 'text-rose-300' : stage.status === 'recovery' ? 'text-amber-300' : stage.status === 'running' ? 'text-indigo-200' : 'text-slate-300'}`}>
@@ -232,10 +237,10 @@ export function AgentProgressOverlay() {
             </div>
 
             {/* Mini Terminal Feed */}
-            <div className="mt-2 bg-black/40 border border-slate-800 rounded-lg p-2 flex flex-col gap-1">
-              <div className="flex items-center gap-1.5 mb-1">
-                <Terminal className="w-3 h-3 text-slate-500" />
-                <span className="text-[9px] font-bold text-slate-500 uppercase">Activity Log</span>
+            <div className="mt-2 bg-black/60 border border-white/5 rounded-xl p-2.5 flex flex-col gap-1.5 shadow-[inset_0_0_15px_rgba(0,0,0,0.8)]">
+              <div className="flex items-center gap-1.5 mb-0.5">
+                <Terminal className="w-3 h-3 text-indigo-400/70" />
+                <span className="text-[9px] font-bold text-indigo-300/50 uppercase tracking-widest">Activity Log</span>
               </div>
               {recentLogs.length > 0 ? (
                 recentLogs.map((log, i) => (

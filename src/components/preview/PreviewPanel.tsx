@@ -16,12 +16,29 @@ export function PreviewPanel({ files, appMode, onLogsUpdate }: { files: Record<s
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const [deviceMode, setDeviceMode] = useState<'full' | 'desktop' | 'tablet' | 'mobile'>('full');
   
+  const [isWaiting, setIsWaiting] = useState(false);
+
   useEffect(() => {
     const saved = localStorage.getItem('nova_device_preview_mode');
     if (saved && ['full', 'desktop', 'tablet', 'mobile'].includes(saved)) {
       setDeviceMode(saved as any);
     }
-  }, []);
+    
+    const handleSetWaiting = (e: any) => setIsWaiting(!!e.detail);
+    window.addEventListener('nova-set-waiting', handleSetWaiting);
+    
+    const handleContainerStarted = (e: any) => {
+       const data = e.detail;
+       setContainerInfo(data);
+       setUrlInput(data.previewUrl + currentPath);
+    };
+    window.addEventListener('nova-container-started', handleContainerStarted);
+    
+    return () => {
+      window.removeEventListener('nova-set-waiting', handleSetWaiting);
+      window.removeEventListener('nova-container-started', handleContainerStarted);
+    };
+  }, [currentPath]);
 
   const handleDeviceMode = (mode: 'full' | 'desktop' | 'tablet' | 'mobile') => {
     setDeviceMode(mode);
@@ -274,6 +291,13 @@ export function PreviewPanel({ files, appMode, onLogsUpdate }: { files: Record<s
                     }
                   }}
                 />
+                {isWaiting && (
+                  <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-xl flex flex-col items-center justify-center z-50 text-white animate-in fade-in duration-300 rounded-[inherit]">
+                    <Loader2 className="w-12 h-12 mb-4 animate-spin text-indigo-400" />
+                    <h3 className="text-xl font-bold tracking-tight text-white drop-shadow-md">Building Dependencies...</h3>
+                    <p className="text-sm text-slate-200 mt-2 font-medium drop-shadow">Agent is constructing upcoming components</p>
+                  </div>
+                )}
               </div>
             </div>
           </div>

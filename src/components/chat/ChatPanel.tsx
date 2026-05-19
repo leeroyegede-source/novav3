@@ -16,7 +16,7 @@ const renderStatus = (statusStr?: string) => {
   return <span className="text-rose-400 font-bold">{statusStr}</span>;
 };
 
-export function ChatPanel({ files, setFiles, setLogs, clearChatTrigger, reloadChatTrigger, appMode, onVerifyCompile }: { files: Record<string, string>, setFiles: (f: Record<string, string>) => void, setLogs: (cb: (prev: string[]) => string[]) => void, clearChatTrigger?: number, reloadChatTrigger?: number, appMode?: string, onVerifyCompile?: (files: Record<string, string>) => Promise<{success: boolean, files?: Record<string, string>}> }) {
+export function ChatPanel({ files, setFiles, setLogs, clearChatTrigger, reloadChatTrigger, appMode, onVerifyCompile }: { files: Record<string, string>, setFiles: (f: Record<string, string>) => void, setLogs: (cb: (prev: string[]) => string[]) => void, clearChatTrigger?: number, reloadChatTrigger?: number, appMode?: string, onVerifyCompile?: (files: Record<string, string>, isMidPlan?: boolean) => Promise<{success: boolean, files?: Record<string, string>, isWaiting?: boolean}> }) {
   const [prompt, setPrompt] = useState("");
   const [messages, setMessages] = useState<{role: string, content: string, reasoning?: string, image?: string}[]>([{ role: 'agent', content: "Welcome to NovaAI! Describe the app you want to build or drop a design screenshot."}]);
   const [isGenerating, setIsGenerating] = useState(false);
@@ -249,6 +249,24 @@ export function ChatPanel({ files, setFiles, setLogs, clearChatTrigger, reloadCh
                 const parsed = JSON.parse(line);
                 if (parsed.type === 'progress') {
                   setProgressLogs(prev => [...prev, parsed.message]);
+                } else if (parsed.type === 'plan_created') {
+                  ProjectMemory.savePendingPlan(parsed.data.pendingPlan, parsed.data.fullPlan);
+                  setProgressLogs(prev => [...prev, parsed.message]);
+                } else if (parsed.type === 'stage_complete') {
+                  setProgressLogs(prev => [...prev, parsed.message]);
+                  const intermediateFiles = { ...files, ...(parsed.data || {}) };
+                  if (onVerifyCompile) {
+                     // non-blocking evaluation
+                     onVerifyCompile(intermediateFiles, true)
+                        .then(res => {
+                           if (res.isWaiting) {
+                              window.dispatchEvent(new CustomEvent('nova-set-waiting', { detail: true }));
+                           } else {
+                              window.dispatchEvent(new CustomEvent('nova-set-waiting', { detail: false }));
+                           }
+                        })
+                        .catch(e => console.error("Mid-plan compile error ignored", e));
+                  }
                 } else if (parsed.type === 'done') {
                   data = parsed.data;
                 } else if (parsed.type === 'error') {
@@ -275,8 +293,9 @@ export function ChatPanel({ files, setFiles, setLogs, clearChatTrigger, reloadCh
         
         let filesToApply = newFiles;
 
-        if (onVerifyCompile) {
-           const verifyResult = await onVerifyCompile(newFiles);
+         if (onVerifyCompile) {
+           const verifyResult = await onVerifyCompile(newFiles, false);
+           window.dispatchEvent(new CustomEvent('nova-set-waiting', { detail: false })); // Lift overlay always at the end
            if (!verifyResult.success) {
               setLogs(prev => [...prev, `[SYSTEM] Compile check failed permanently after Auto-Heal. Halting execution.`]);
               setFiles(verifyResult.files || files); // Rollback
@@ -285,7 +304,7 @@ export function ChatPanel({ files, setFiles, setLogs, clearChatTrigger, reloadCh
            } else if (verifyResult.files) {
               filesToApply = verifyResult.files; // Use fixed files if auto-heal succeeded
            }
-        }
+         }
         
         setHistory(prev => {
           const newHistory = prev.slice(0, timelineIndex + 1);
@@ -450,9 +469,9 @@ export function ChatPanel({ files, setFiles, setLogs, clearChatTrigger, reloadCh
               <div className="pt-2 border-t border-indigo-500/10">
                 <div className="bg-black/60 rounded-lg p-3 h-40 overflow-y-auto font-mono text-[10px] text-indigo-300 shadow-[inset_0_0_10px_rgba(0,0,0,0.5)]">
                   {progressLogs.map((log, idx) => (
-                    <div key={idx} className="mb-1 opacity-90 hover:opacity-100 transition-opacity">
-                      <span className="text-slate-500 mr-2">{'>'}</span>
-                      {log}
+                    <div key={idx} className="mb-1 opacity-90 hover:opacity-100 transition-opacity flex items-start">
+                      <span className="text-slate-500 mr-2 shrink-0">{'>'}</span>
+                      <span className="break-all">{log}</span>
                     </div>
                   ))}
                   <div ref={logsEndRef} />
@@ -491,8 +510,8 @@ export function ChatPanel({ files, setFiles, setLogs, clearChatTrigger, reloadCh
           <button 
             type="button" 
             onClick={() => fileInputRef.current?.click()}
-            className="absolute left-2 top-2.5 p-1 z-10 text-slate-400 hover:text-indigo-400 transition-colors"
-            title="Attach Design Reference"
+            className="absolute left-2 top-2.5 p-1.5 z-10 bg-indigo-500/10 border border-indigo-500/30 rounded-md text-indigo-400 hover:bg-indigo-500/20 hover:text-indigo-300 transition-all shadow-sm shadow-indigo-500/10"
+            title="Attach Design Reference (Image)"
           >
             <ImageIcon className="w-4 h-4" />
           </button>

@@ -47,6 +47,28 @@ export async function POST(req: Request) {
         }
       });
 
+      // Cleanup empty directories left behind
+      const removeEmptyDirectories = (dirPath: string) => {
+        if (!fs.existsSync(dirPath)) return;
+        let currentFiles = fs.readdirSync(dirPath);
+        currentFiles.forEach((file) => {
+          if (file === 'node_modules' || file === '.next' || file === '.git' || file === 'vendor') return;
+          const fullPath = path.join(dirPath, file);
+          if (fs.statSync(fullPath).isDirectory()) {
+            removeEmptyDirectories(fullPath);
+          }
+        });
+        
+        // Only delete if it's actually empty and not the root workspace
+        if (dirPath !== workspaceDir) {
+           currentFiles = fs.readdirSync(dirPath);
+           if (currentFiles.length === 0) {
+             try { fs.rmdirSync(dirPath); } catch (e) {}
+           }
+        }
+      };
+      removeEmptyDirectories(workspaceDir);
+
       // Write updated files
       for (const [filePath, content] of Object.entries(files)) {
         const safePath = filePath.startsWith('/') ? filePath.slice(1) : filePath;
@@ -54,11 +76,7 @@ export async function POST(req: Request) {
         const dir = path.dirname(fullPath);
         if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
         
-        // Prevent mounting .env files unless explicitly approved
-        if (safePath.includes('.env')) {
-            console.warn(`Skipping .env file: ${safePath}`);
-            continue;
-        }
+
 
         // Inject Auto-Heal Spy Script
         let finalContent = content as string;
@@ -73,12 +91,15 @@ export async function POST(req: Request) {
   });
 
   // Nova Click-to-Edit Overlay
-  let outlineElement = document.createElement('div');
-  outlineElement.style.cssText = 'position: absolute; border: 2px solid #6366f1; background: rgba(99,102,241,0.2); pointer-events: none; z-index: 999999; display: none; transition: all 0.1s; border-radius: 4px; box-shadow: 0 0 10px rgba(99,102,241,0.5);';
-  document.addEventListener('DOMContentLoaded', () => document.body.appendChild(outlineElement));
+  let outlineElement = null;
 
   window.addEventListener('mousemove', function(e) {
     if (e.altKey) {
+      if (!outlineElement || !document.body.contains(outlineElement)) {
+        outlineElement = document.createElement('div');
+        outlineElement.style.cssText = 'position: absolute; border: 2px solid #6366f1; background: rgba(99,102,241,0.2); pointer-events: none; z-index: 999999; display: none; transition: all 0.1s; border-radius: 4px; box-shadow: 0 0 10px rgba(99,102,241,0.5);';
+        document.body.appendChild(outlineElement);
+      }
       const target = e.target;
       if (target && target !== outlineElement && target !== document.body && target !== document.documentElement) {
         const rect = target.getBoundingClientRect();
@@ -89,7 +110,7 @@ export async function POST(req: Request) {
         outlineElement.style.display = 'block';
         document.body.style.cursor = 'crosshair';
       }
-    } else {
+    } else if (outlineElement) {
       outlineElement.style.display = 'none';
       document.body.style.cursor = '';
     }
@@ -100,7 +121,7 @@ export async function POST(req: Request) {
   });
   window.addEventListener('keyup', function(e) {
     if (e.key === 'Alt') {
-      outlineElement.style.display = 'none';
+      if (outlineElement) outlineElement.style.display = 'none';
       document.body.style.cursor = '';
     }
   });
@@ -123,11 +144,26 @@ export async function POST(req: Request) {
   }, true);
 </script>
 `;
-            if ((safePath.endsWith('.html') || safePath.endsWith('.php')) && /<head[^>]*>/i.test(finalContent)) {
-                finalContent = finalContent.replace(/(<head[^>]*>)/i, `$1` + spyScript);
-            } else if ((safePath.endsWith('_app.js') || safePath.endsWith('_document.js')) && finalContent.includes('return')) {
-                // Next.js injection is trickier without breaking React tree, so we skip it for now or do it via next.config.js later
-                // Just fallback to Vite for now
+            // For Next.js/React, inline dangerouslySetInnerHTML scripts can be highly volatile due to hydration and JSX parsing.
+            // A foolproof method is to write the spy script to the public directory and reference it.
+            const rawJs = spyScript.replace('<script>', '').replace('</script>', '').trim();
+            const publicScriptPath = path.join(workspaceDir, 'public', '__nova_spy.js');
+            const rootScriptPath = path.join(workspaceDir, '__nova_spy.js');
+            const publicDir = path.dirname(publicScriptPath);
+            if (!fs.existsSync(publicDir)) fs.mkdirSync(publicDir, { recursive: true });
+            fs.writeFileSync(publicScriptPath, rawJs);
+            fs.writeFileSync(rootScriptPath, rawJs);
+
+            if ((safePath.endsWith('.html') || safePath.endsWith('.php')) && /<\/body>/i.test(finalContent)) {
+                finalContent = finalContent.replace(/(<\/body>)/i, `\n<script src="/__nova_spy.js" defer></script>\n$1`);
+            } else if ((safePath.endsWith('layout.tsx') || safePath.endsWith('layout.jsx') || safePath.endsWith('layout.js')) && /<\/body>/i.test(finalContent)) {
+                // Next.js App Router Support
+                const reactScript = `\n        <script src="/__nova_spy.js" defer></script>\n`;
+                finalContent = finalContent.replace(/(<\/body>)/i, reactScript + `$1`);
+            } else if ((safePath.endsWith('_document.js') || safePath.endsWith('_document.tsx')) && /<\/body>/i.test(finalContent)) {
+                // Next.js Pages Router Support
+                const reactScript = `\n        <script src="/__nova_spy.js" defer></script>\n`;
+                finalContent = finalContent.replace(/(<\/body>)/i, reactScript + `$1`);
             }
         }
 

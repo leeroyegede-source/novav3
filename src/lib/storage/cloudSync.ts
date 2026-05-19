@@ -67,7 +67,11 @@ export class CloudSyncManager {
       const cleanFiles: Record<string, string> = {};
       for (const [path, content] of Object.entries(files)) {
         if (!path.includes('/node_modules/') && !path.includes('/.next/') && !path.includes('/dist/')) {
-          cleanFiles[path] = content;
+          if (typeof content === 'string' && content.startsWith('__NOVA_BASE64__')) {
+            cleanFiles[path] = '__NOVA_BASE64_PLACEHOLDER__';
+          } else {
+            cleanFiles[path] = content;
+          }
         }
       }
 

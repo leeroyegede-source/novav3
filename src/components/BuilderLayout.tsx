@@ -605,8 +605,8 @@ export function BuilderLayout({ userEmail }: { userEmail?: string }) {
     }
   };
 
-  const handleVerifyCompile = async (newFiles: Record<string, string>): Promise<{success: boolean, files?: Record<string, string>}> => {
-    setLogs(prev => [...prev, `[SYSTEM] Running automated compile check...`]);
+  const handleVerifyCompile = async (newFiles: Record<string, string>, isMidPlan: boolean = false): Promise<{success: boolean, files?: Record<string, string>, isWaiting?: boolean}> => {
+    setLogs(prev => [...prev, isMidPlan ? `[SYSTEM] Running mid-plan dependency check...` : `[SYSTEM] Running final automated compile check...`]);
     try {
       const testRes = await fetch('/api/preview/start', {
         method: 'POST',
@@ -614,13 +614,17 @@ export function BuilderLayout({ userEmail }: { userEmail?: string }) {
         body: JSON.stringify({ projectId: 'nova-project-1', files: newFiles, appMode })
       });
       
+      const testData = await testRes.json();
+
       if (!testRes.ok) {
-         const errData = await testRes.json();
-         const errStr = errData.error || errData.message || 'Unknown compile error';
+         const errStr = testData.error || testData.message || 'Unknown compile error';
          setLogs(prev => [...prev, `[ERROR] Automated compile check failed. Triggering Auto-Heal...`]);
          const healResult = await executeAutoHealPipeline(errStr, 'compile-error', newFiles);
          return healResult;
       } else {
+         // Sync the new container port with the Preview Panel
+         window.dispatchEvent(new CustomEvent('nova-container-started', { detail: testData }));
+         
          // Wait 4 seconds for Next.js to actually compile the code
          setLogs(prev => [...prev, `[SYSTEM] Waiting 4s for compiler validation...`]);
          await new Promise(resolve => setTimeout(resolve, 4000));
@@ -635,16 +639,26 @@ export function BuilderLayout({ userEmail }: { userEmail?: string }) {
            const hasError = logsStr.includes('Failed to compile') || logsStr.includes('SyntaxError') || logsStr.includes('Module not found') || logsStr.includes('ReferenceError') || logsStr.includes('TypeError') || logsStr.includes('Type error:') || logsStr.includes('[PROCESS ERROR]');
            
            if (hasError) {
-             setLogs(prev => [...prev, `[ERROR] Compiler caught an error! Extracting logs and triggering Auto-Heal...`]);
              // Extract the last 20 lines of the log which usually contain the exact error
              const errorLines = (logData.logs || []).slice(-20).join('\n');
+             
+             if (isMidPlan) {
+               // Regex Diagnostics Engine
+               const isMissingDependency = errorLines.includes('Module not found') || errorLines.includes('is not defined') || errorLines.includes('was not found in');
+               if (isMissingDependency) {
+                 setLogs(prev => [...prev, `[SYSTEM] Mid-plan compiler error ignored (Future Dependency). Waiting for next stage...`]);
+                 return { success: true, files: newFiles, isWaiting: true };
+               }
+             }
+
+             setLogs(prev => [...prev, `[ERROR] Compiler caught an error! Extracting logs and triggering Auto-Heal...`]);
              const healResult = await executeAutoHealPipeline(errorLines, 'compile-error', newFiles);
              return healResult;
            }
          }
          
          setLogs(prev => [...prev, `[SYSTEM] Compile check passed!`]);
-         return { success: true, files: newFiles };
+         return { success: true, files: newFiles, isWaiting: false };
       }
     } catch(e) {
       console.warn("Compile check request failed", e);
@@ -663,11 +677,40 @@ export function BuilderLayout({ userEmail }: { userEmail?: string }) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ prompt, currentFiles: currentFilesState, isAutoHeal, aiModel, apiKey })
       });
-      const data = await res.json().catch(() => ({}));
+      let data: any = {};
+      const reader = res.body?.getReader();
+      const decoder = new TextDecoder();
+      if (reader) {
+        let buffer = '';
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split('\n');
+          buffer = lines.pop() || '';
+          
+          for (const line of lines) {
+            if (line.trim()) {
+              try {
+                const parsed = JSON.parse(line);
+                if (parsed.type === 'done') {
+                  data = parsed.data;
+                } else if (parsed.type === 'error') {
+                  throw new Error(parsed.error);
+                } else if (parsed.type === 'progress') {
+                  setLogs(prev => [...prev, `[AI PROGRESS] ${parsed.message}`]);
+                }
+              } catch(e) {}
+            }
+          }
+        }
+      }
+
       if (!res.ok) {
          throw new Error(data.error || data.message || `Server responded with status ${res.status}`);
       }
-      if (data.files) {
+      
+      if (data && data.files) {
         setFiles(data.files);
         setLogs(prev => [...prev, isCanvas ? `[SYSTEM] Canvas AI integration code automatically applied!` : `[SYSTEM] AI modifications applied successfully.`]);
         

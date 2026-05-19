@@ -36,6 +36,21 @@ export class LocalRunner {
   static async startContainer({ projectId, projectPath, runtime }: StartOptions) {
     await this.stopContainer(projectId);
 
+    const pkgPath = path.join(projectPath, 'package.json');
+    let hasDevScript = true;
+    let hasStartScript = false;
+    let mainScript = 'index.js';
+    try {
+      if (require('fs').existsSync(pkgPath)) {
+        const pkg = JSON.parse(require('fs').readFileSync(pkgPath, 'utf8'));
+        if (pkg.scripts) {
+          hasDevScript = !!pkg.scripts.dev;
+          hasStartScript = !!pkg.scripts.start;
+        }
+        if (pkg.main) mainScript = pkg.main;
+      }
+    } catch(e) {}
+
     // Default container port mapping hint
     let defaultPort = 3002;
     if (runtime === 'vite') defaultPort = 3002;
@@ -45,7 +60,15 @@ export class LocalRunner {
     PortManager.assignPort(projectId, localPort);
 
     const mountedPath = path.resolve(projectPath);
-    const config = this.getRuntimeConfig(runtime, localPort, mountedPath);
+    let config = this.getRuntimeConfig(runtime, localPort, projectPath);
+    if (runtime === 'vite' || runtime === 'nextjs' || runtime === 'node') {
+      const devCmd = hasDevScript ? 'dev' : (hasStartScript ? 'start' : null);
+      if (!devCmd && runtime === 'node') {
+         config.args = ['install', '--no-audit', '&&', 'node', mainScript];
+      } else if (devCmd === 'start') {
+         config.args = config.args.map(a => a === 'dev' ? 'start' : a);
+      }
+    }
 
     this.containerLogs.set(projectId, [`Starting local process for ${runtime} on port ${localPort}...`, `Command: ${config.command} ${config.args.join(' ')}`]);
 
