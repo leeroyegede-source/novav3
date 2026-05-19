@@ -188,6 +188,7 @@ export function ChatPanel({ files, setFiles, setLogs, clearChatTrigger, reloadCh
     setAttachedImage(null);
     setMessages(prev => [...prev, { role: 'user', content: userMsg, image: currentImage || undefined }]);
     setIsGenerating(true);
+    setProgressLogs(["[SYSTEM] Connecting to Orchestrator..."]);
     setLogs(prev => [...prev, `[SYSTEM] Processing request with Vision Agent...`]);
     
     abortControllerRef.current = new AbortController();
@@ -230,7 +231,36 @@ export function ChatPanel({ files, setFiles, setLogs, clearChatTrigger, reloadCh
         throw new Error(errorData.error || `Server responded with status ${res.status}`);
       }
       
-      const data = await res.json();
+      let data: any = {};
+      const reader = res.body?.getReader();
+      const decoder = new TextDecoder();
+      if (reader) {
+        let buffer = '';
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split('\n');
+          buffer = lines.pop() || '';
+          
+          for (const line of lines) {
+            if (line.trim()) {
+              try {
+                const parsed = JSON.parse(line);
+                if (parsed.type === 'progress') {
+                  setProgressLogs(prev => [...prev, parsed.message]);
+                } else if (parsed.type === 'done') {
+                  data = parsed.data;
+                } else if (parsed.type === 'error') {
+                  throw new Error(parsed.error);
+                }
+              } catch(e) {
+                console.error("Stream parse error:", e, line);
+              }
+            }
+          }
+        }
+      }
       
       // Move pending plan save to the end to prevent race condition with Auto-Heal
       if (data.buildState !== undefined) {
@@ -322,19 +352,12 @@ export function ChatPanel({ files, setFiles, setLogs, clearChatTrigger, reloadCh
 
 
 
-  const [progressMsg, setProgressMsg] = useState("Initializing...");
+  const [progressLogs, setProgressLogs] = useState<string[]>([]);
+  const logsEndRef = useRef<HTMLDivElement>(null);
+
   useEffect(() => {
-    if (isGenerating) {
-      const msgs = ["Reading project memory...", "Creating snapshot...", "Inspecting files...", "Applying changes...", "Running tests...", "Validating runner..."];
-      let i = 0;
-      setProgressMsg(msgs[0]);
-      const intv = setInterval(() => {
-        i = (i + 1) % msgs.length;
-        setProgressMsg(msgs[i]);
-      }, 2000);
-      return () => clearInterval(intv);
-    }
-  }, [isGenerating]);
+    logsEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [progressLogs]);
 
   return (
     <div className="flex-1 flex flex-col h-full overflow-hidden">
@@ -423,27 +446,17 @@ export function ChatPanel({ files, setFiles, setLogs, clearChatTrigger, reloadCh
                 </button>
               </div>
 
-              {/* Agent Pipeline Graph */}
-              <div className="grid grid-cols-4 gap-2 pt-2 border-t border-indigo-500/10">
-                <div className={`flex flex-col items-center text-center gap-2 p-2 rounded-lg transition-all duration-500 ${progressMsg.includes('memory') || progressMsg.includes('snapshot') ? 'bg-indigo-500/20 border border-indigo-500/30 shadow-[0_0_15px_rgba(99,102,241,0.2)] scale-105' : 'bg-slate-900/50 border border-slate-800 opacity-50'}`}>
-                  <Database className={`w-4 h-4 ${progressMsg.includes('memory') || progressMsg.includes('snapshot') ? 'text-indigo-400 animate-pulse' : 'text-slate-500'}`} />
-                  <span className="text-[9px] font-bold uppercase tracking-wider text-slate-300">Architect</span>
+              {/* Live Terminal Feed */}
+              <div className="pt-2 border-t border-indigo-500/10">
+                <div className="bg-black/60 rounded-lg p-3 h-40 overflow-y-auto font-mono text-[10px] text-indigo-300 shadow-[inset_0_0_10px_rgba(0,0,0,0.5)]">
+                  {progressLogs.map((log, idx) => (
+                    <div key={idx} className="mb-1 opacity-90 hover:opacity-100 transition-opacity">
+                      <span className="text-slate-500 mr-2">{'>'}</span>
+                      {log}
+                    </div>
+                  ))}
+                  <div ref={logsEndRef} />
                 </div>
-                <div className={`flex flex-col items-center text-center gap-2 p-2 rounded-lg transition-all duration-500 ${progressMsg.includes('Inspecting') ? 'bg-purple-500/20 border border-purple-500/30 shadow-[0_0_15px_rgba(168,85,247,0.2)] scale-105' : 'bg-slate-900/50 border border-slate-800 opacity-50'}`}>
-                  <Palette className={`w-4 h-4 ${progressMsg.includes('Inspecting') ? 'text-purple-400 animate-pulse' : 'text-slate-500'}`} />
-                  <span className="text-[9px] font-bold uppercase tracking-wider text-slate-300">Designer</span>
-                </div>
-                <div className={`flex flex-col items-center text-center gap-2 p-2 rounded-lg transition-all duration-500 ${progressMsg.includes('Applying') ? 'bg-cyan-500/20 border border-cyan-500/30 shadow-[0_0_15px_rgba(6,182,212,0.2)] scale-105' : 'bg-slate-900/50 border border-slate-800 opacity-50'}`}>
-                  <Code className={`w-4 h-4 ${progressMsg.includes('Applying') ? 'text-cyan-400 animate-pulse' : 'text-slate-500'}`} />
-                  <span className="text-[9px] font-bold uppercase tracking-wider text-slate-300">Developer</span>
-                </div>
-                <div className={`flex flex-col items-center text-center gap-2 p-2 rounded-lg transition-all duration-500 ${progressMsg.includes('Running') || progressMsg.includes('Validating') ? 'bg-emerald-500/20 border border-emerald-500/30 shadow-[0_0_15px_rgba(16,185,129,0.2)] scale-105' : 'bg-slate-900/50 border border-slate-800 opacity-50'}`}>
-                  <ShieldCheck className={`w-4 h-4 ${progressMsg.includes('Running') || progressMsg.includes('Validating') ? 'text-emerald-400 animate-pulse' : 'text-slate-500'}`} />
-                  <span className="text-[9px] font-bold uppercase tracking-wider text-slate-300">QA Tester</span>
-                </div>
-              </div>
-              <div className="text-[10px] text-center text-indigo-300/70 font-mono tracking-widest mt-1">
-                {progressMsg.toUpperCase()}
               </div>
             </div>
           </div>

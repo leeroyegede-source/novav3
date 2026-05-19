@@ -102,14 +102,32 @@ async function generateExecutionPlan(prompt: string, aiModel: string, apiKey: st
 export async function POST(req: Request) {
   try {
     const body = await req.json();
-    return await runDefaultAIRequest(body);
+    const encoder = new TextEncoder();
+    const stream = new ReadableStream({
+      async start(controller) {
+        const onProgress = (msg: string) => {
+          try {
+            controller.enqueue(encoder.encode(JSON.stringify({ type: 'progress', message: msg }) + '\n'));
+          } catch(e) {}
+        };
+        try {
+          const result = await runDefaultAIRequest(body, onProgress);
+          controller.enqueue(encoder.encode(JSON.stringify({ type: 'done', data: result }) + '\n'));
+        } catch(error: any) {
+          controller.enqueue(encoder.encode(JSON.stringify({ type: 'error', error: error.message }) + '\n'));
+        } finally {
+          controller.close();
+        }
+      }
+    });
+    return new Response(stream, { headers: { 'Content-Type': 'application/x-ndjson', 'Cache-Control': 'no-cache', 'Connection': 'keep-alive' } });
   } catch (error: unknown) {
     const err = error as Error;
     return NextResponse.json({ error: err.message }, { status: 500 });
   }
 }
 
-async function runDefaultAIRequest(body: any) {
+async function runDefaultAIRequest(body: any, onProgress?: (msg: string) => void) {
   let prompt = body.prompt || "";
   // 1. HARD BLOCK: Strip massive generated directories
   const safeFiles: Record<string, string> = {};
@@ -195,43 +213,56 @@ async function runDefaultAIRequest(body: any) {
 
   const isDirectEdit = (prompt.includes('Make changes to the') && prompt.includes('element')) || !!imageBase64;
 
+  const entryFileMap: Record<string, string> = {
+    "React / Vite": "src/App.jsx",
+    "Next.js": "src/app/page.tsx",
+    "Node / Express": "index.js",
+    "Static Website": "index.html",
+    "PHP": "index.php"
+  };
+  const reqFile = entryFileMap[appMode] || "index.js";
+  const isExistingApp = Object.keys(safeFiles).some(k => k.includes(reqFile)) && Object.keys(safeFiles).length > 4;
+
   if (!isAutoHeal && !isDirectEdit) {
     const pLower = prompt.toLowerCase();
     if ((pLower.includes('continue') || pLower.includes('proceed')) && memory.pending_plan && memory.pending_plan.length > 0) {
+      if (onProgress) onProgress("[PLANNER] Resuming paused execution plan...");
       console.log("[Planner Pipeline] Resuming paused execution plan...");
       plan = memory.pending_plan;
       originalPlan = memory.full_plan || plan;
       finalMessage += `### Resuming Execution\nPicking up from Stage ${plan[0].stage}...\n`;
     } else {
+      if (onProgress) onProgress("[PLANNER] Calculating stages for task...");
       console.log("[Planner Pipeline] Task is Large/Medium. Generating strict execution plan...");
       try {
         const sysPrompt = `You are the NovaAI Planner Agent. Your ONLY job is to break the user's prompt into very small, token-safe coding stages.
 App Mode: ${appMode}
+Calculated Task Size: ${routingInfo.estimatedTaskSize}
+
+CRITICAL TOKEN-SAFETY DIRECTIVE:
+The Routing Agent has calculated this task as "${routingInfo.estimatedTaskSize}".
+- If "Small": You may use 1 to 2 stages.
+- If "Medium": You MUST split this into at least 3 to 4 distinct microscopic stages.
+- If "Large": You MUST split this into a MINIMUM of 5 microscopic stages, but there is NO maximum limit. Calculate exactly how many stages are needed to ensure no single stage exceeds the output token limit (even if it takes 15+ stages).
+Failure to split Large/Medium tasks into enough stages will cause the Builder Agent to crash mid-generation and corrupt the project.
 
 Respond in strict JSON ONLY:
 {
   "stages": [
-    { "stage": 1, "task": "initialize main entry file (e.g. App.js, index.html) and replace boilerplate scaffolding" },
+    { "stage": 1, "task": "${isExistingApp ? "Analyze existing files and begin targeted edits" : "initialize main entry file (e.g. App.js, index.html) and replace boilerplate scaffolding"}" },
     { "stage": 2, "task": "add routing and navigation" }
   ]
 }
 STABLE BUILD MODE RULES (CRITICAL):
-1. Stage 1 MUST ALWAYS explicitly update or create the main entry file for the application so the preview compiler and runner work immediately. Do not leave the original scaffolding untouched in Stage 1.
+${isExistingApp ? "1. EXISTING APP DETECTED: Do NOT overwrite the core architecture or initialize scaffolding. Plan surgical, targeted edits based ONLY on the user's specific request." : "1. Stage 1 MUST ALWAYS explicitly update or create the main entry file for the application so the preview compiler and runner work immediately. Do not leave the original scaffolding untouched in Stage 1."}
 2. STUB-FIRST DEVELOPMENT MODE: Stages must follow a strict sequence: Types/Interfaces -> Route Shell -> Placeholder UI -> API Stubs -> Real Logic. Never immediately build full logic.
 3. MODULE EXECUTION RULE: Every stage MUST be independently compilable and executable. Do NOT generate a stage that requires a future stage to compile.
 4. Maximum 4 files per stage. Make tasks microscopic.
-5. AESTHETICS & IMAGES: If the task involves UI, the final stage MUST explicitly be "Apply premium CSS, typography, hover states, and create beautifully styled blank placeholders for all images to ensure a breathtaking final design."`;
+5. DESIGN SPLITTING DIRECTIVE: Never attempt to design or style the entire application in one single stage. ${isExistingApp ? "Because this is an EXISTING APP doing a surgical edit, do NOT generate global design or CSS stages unless the user explicitly requested styling changes." : "If the task is UI-heavy, you MUST split the design into as many final stages as mathematically necessary based on the load (e.g. Stage N: Hero CSS, Stage N+1: Navbar CSS). There is NO maximum limit for design stages. Do not cram all styling into a few stages if it requires more."}`;
         plan = await generateExecutionPlan(prompt, aiModel, apiKey, sysPrompt);
 
         // --- HARDCODED STAGE 1 INTERCEPTOR ---
-        if (plan && plan.length > 0) {
-          const entryFileMap: Record<string, string> = {
-            "React / Vite": "src/App.jsx",
-            "Next.js": "src/app/page.tsx",
-            "Node / Express": "index.js",
-            "Static Website": "index.html",
-            "PHP": "index.php"
-          };
+        if (!isExistingApp && plan && plan.length > 0) {
           const targetFiles = entryFileMap[appMode] || "the main entry file (e.g. App.jsx, index.html)";
 
           const stage1Task = plan[0].task.toLowerCase();
@@ -252,10 +283,12 @@ STABLE BUILD MODE RULES (CRITICAL):
 
   // --- THE EXECUTION LOOP ---
   if (plan.length > 0) {
+    if (onProgress) onProgress("[ORCHESTRATOR] Executing stages autonomously...");
     console.log(`[Orchestrator] Executing stages autonomously...`);
 
     while (plan.length > 0) {
       const stage = plan[0];
+      if (onProgress) onProgress(`[BUILDER] Running Stage ${stage.stage}: ${stage.task}`);
       console.log(`[Orchestrator] Running Stage ${stage.stage}: ${stage.task}`);
 
       const stagePrompt = `STAGE ${stage.stage}: ${stage.task}
@@ -417,14 +450,14 @@ Respond in strict JSON ONLY: { "stages": [ {"stage": "${stage.stage}.1", "task":
     delete generatedFiles[manifestKey];
   }
 
-  return NextResponse.json({
+  return {
     success: true,
     files: generatedFiles,
     message: finalMessage,
     reasoning: finalReasoning,
     structuredResponse: finalStructuredResponse,
     routing: routingInfo
-  });
+  };
 }
 
 // Removed runNovaSaferRequest as requested
