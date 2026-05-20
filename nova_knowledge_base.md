@@ -138,3 +138,28 @@ API limits and credit exhaustion are the most common causes of pipeline failure.
 *   **The Freeze:** Instead of crashing and wiping the chat, the orchestrator immediately halts the pipeline. It takes the remaining uncompleted stages and aggressively writes them back into `ProjectMemory` as the `pendingPlan`. 
 *   **The Safe State:** The application is locked into a "Runner-Safe" compilation state (the last successful stage).
 *   **How to Fix It:** The UI will alert the user that their API limits were reached. The user can either switch their AI Provider in the Environment panel (e.g., swap from Claude to Gemini Free) or wait for their rate limits to reset. Once resolved, the user simply types "continue" in the chat, and the platform will revive the exact frozen state and pick up right where it left off, ensuring zero lost progress.
+
+## 7. Token Preservation & Design Lock Architecture (The Final Polish)
+
+To radically cut API costs and prevent models from destroying UI consistency, NovaAI employs a rigid set of Anti-Hallucination and Token-Saving protocols.
+
+### A. Role-Based Interceptor (The Multi-Model Router)
+The Orchestrator dynamically intercepts prompts and assigns them to the most cost-effective model:
+1. **The Builder (Gemini 2.5 Flash):** Handles raw logic, API wiring, and file scaffolding. Highly cost-effective but visually blind.
+2. **The Designer (Claude Sonnet 4.6):** Handles pure UI/UX styling, TailwindCSS polishing, and CSS generation.
+3. **The Debugger (Claude Opus 4.7):** Triggered exclusively when the user types "error" or uses the Auto-Heal button. It applies surgical patches to fix deep compiler issues.
+
+### B. Micro-Stage Breakdown (The Planner)
+The AI Planner is strictly banned from generating entire web pages (Header, Main, Footer) in a single massive stage. It is forced to mathematically slice UI tasks into **Micro-Stages** (e.g., Stage 4: Header, Stage 5: Main Content, Stage 6: Footer). This prevents the AI from hitting output token limits and crashing midway.
+
+### C. The Design Manifest System (Anti-Hallucination)
+Because Gemini (The Builder) codes fast but creates "shabby" designs, we use a Design Lock:
+* **The Designer Pass:** When Claude Sonnet designs a component, it logs the custom Tailwind utility classes into a `nova-design-tokens.json` manifest.
+* **The Builder Pass:** When Gemini adds a new feature later (like a new menu item), it is STRICTLY BANNED from inventing new Tailwind classes. It must read the `nova-design-tokens.json` file and reuse Claude's exact premium styling, locking in absolute visual consistency across the entire platform.
+
+### D. DRY Principle & Component Looping
+To slash token consumption during generation, the AI is banned from writing repetitive HTML (e.g., writing the same HTML 6 times for 6 pricing cards). It is mandated to use data arrays and loops (`.map()`, `foreach`) to render repetitive UI components, guaranteeing clean, enterprise-grade codebase structures.
+
+### E. CDN-Aware Context Banning
+* **New Projects:** The AI will automatically inject the Tailwind CDN to save configuration tokens.
+* **Old Projects:** The AI detects existing `package.json` or `tailwind.config.js` and is strictly banned from using CDNs or generating conflicting Node.js configurations (especially in PHP/Static modes where Node.js does not exist).
