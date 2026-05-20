@@ -261,7 +261,7 @@ ${isExistingApp ? "1. EXISTING APP DETECTED: Do NOT overwrite the core architect
 2. STUB-FIRST DEVELOPMENT MODE: Stages must follow a strict sequence: Types/Interfaces -> Route Shell -> Placeholder UI -> API Stubs -> Real Logic. Never immediately build full logic.
 3. MODULE EXECUTION RULE: Every stage MUST be independently compilable and executable. Do NOT generate a stage that requires a future stage to compile.
 4. Maximum 4 files per stage. Make tasks microscopic.
-5. DESIGN SPLITTING DIRECTIVE: Never attempt to design or style the entire application in one single stage. ${isExistingApp ? "Because this is an EXISTING APP doing a surgical edit, do NOT generate global design or CSS stages unless the user explicitly requested styling changes." : "If the task is UI-heavy, you MUST split the design into as many final stages as mathematically necessary based on the load (e.g. Stage N: Hero CSS, Stage N+1: Navbar CSS). There is NO maximum limit for design stages. Do not cram all styling into a few stages if it requires more."}`;
+5. MICRO-STAGE DESIGN DIRECTIVE: NEVER group Header, Body/Main Content, and Footer styling into a single stage. You MUST break UI design down into Micro-Stages (e.g., Stage N: Style the Header, Stage N+1: Style the Main Content, Stage N+2: Style the Footer). Instruct the builder to use Surgical Line Editing instead of rewriting entire files to save tokens! ${isExistingApp ? "Because this is an EXISTING APP doing a surgical edit, do NOT generate global design or CSS stages unless the user explicitly requested styling changes." : "If the task is UI-heavy, you MUST split the design into as many microscopic stages as mathematically necessary. There is NO maximum limit for design stages."}`;
         plan = await generateExecutionPlan(prompt, aiModel, apiKey, sysPrompt);
 
         // --- HARDCODED STAGE 1 INTERCEPTOR ---
@@ -365,10 +365,20 @@ Respond in strict JSON ONLY: { "stages": [ {"stage": "${stage.stage}.1", "task":
 
         if (plan.length > 0) {
           const nextStage = plan[0];
-          finalMessage += `\n\n⏸️ **Stage Complete.**\nWaiting for your permission to proceed to Next Stage: ${nextStage.task}\nReply "continue" to proceed.`;
-          finalStructuredResponse.pendingPlan = plan;
-          finalStructuredResponse.fullPlan = originalPlan;
-          break; // Manual step-by-step mode - requires user permission to continue
+          
+          const isCurrentDesign = stage.task.match(/design|style|css|polish|ui|tailwind/i);
+          const isNextDesign = nextStage.task.match(/design|style|css|polish|ui|tailwind/i);
+
+          if (isNextDesign && !isCurrentDesign) {
+             finalMessage += `\n\n⏸️ **Design Phase Reached.**\nCore logic is complete. Next up: Stage ${nextStage.stage} (${nextStage.task})\n\nDo you want me to proceed with styling the UI? Reply "continue" to proceed, or stop here if you like the current design.`;
+             finalStructuredResponse.pendingPlan = plan;
+             finalStructuredResponse.fullPlan = originalPlan;
+             break; // Manual step-by-step mode for design barrier
+          } else {
+             finalMessage += `\n\n✅ **Stage Complete.** Proceeding automatically to Next Stage: ${nextStage.task}...`;
+             if (onProgress) onProgress(`[ORCHESTRATOR] Automatically proceeding to Stage ${nextStage.stage}...`);
+             // We do NOT break here. The while loop continues automatically.
+          }
         } else {
           finalMessage += `\n\n🎉 **All Stages Complete!**`;
           finalStructuredResponse.pendingPlan = [];

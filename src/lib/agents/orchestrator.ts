@@ -2,13 +2,13 @@ import Anthropic from '@anthropic-ai/sdk';
 import { generateASTMap } from './astParser';
 
 export type AgentRole =
-  | "ProductManager" 
-  | "Architect" 
-  | "Builder" 
-  | "API" 
-  | "Database" 
-  | "UI_UX" 
-  | "Debugger" 
+  | "ProductManager"
+  | "Architect"
+  | "Builder"
+  | "API"
+  | "Database"
+  | "UI_UX"
+  | "Debugger"
   | "Tool_Plugin"
   | "Auth"
   | "Test_QA"
@@ -150,7 +150,25 @@ Return strictly JSON matching this structure:
 export async function routeToAgent(request: AgentRequest): Promise<AgentResponse> {
   console.log(`Routing request to ${request.role} agent using model: ${request.aiModel || 'default'}...`);
 
-  const aiModel = request.aiModel || 'default';
+  let aiModel = request.aiModel || 'default';
+
+  // --- ROLE-BASED MODEL INTERCEPTOR ---
+  if (aiModel === 'gemini-free' || aiModel === 'nova-safer') {
+    const text = request.prompt.toLowerCase();
+    const isError = text.includes('error') || text.includes('fix') || text.includes('debug') || text.includes('bug') || text.includes('fail') || text.includes('issue');
+    const isDesign = text.includes('design') || text.includes('polish') || text.includes('css') || text.includes('ui') || text.includes('styling') || text.includes('tailwind') || text.includes('layout') || text.includes('style');
+
+    if (isError || request.role === 'Debugger') {
+      aiModel = 'claude-opus-4-7'; // Override to Opus for deep debugging
+      console.log(`[Role Interceptor] Task requires Debugging. Upgrading model to ${aiModel}`);
+    } else if (isDesign || request.role === 'UI_UX') {
+      aiModel = 'claude-sonnet-4-6'; // Override to Claude for Premium Design
+      console.log(`[Role Interceptor] Task requires Design/Polish. Upgrading model to ${aiModel}`);
+    } else {
+      aiModel = 'gemini-2.5-flash'; // Default to fast builder
+      console.log(`[Role Interceptor] Task is General Logic/Building. Using cost-effective ${aiModel}`);
+    }
+  }
   const customApiKey = request.apiKey || '';
   const defaultApiKey = process.env.ANTHROPIC_API_KEY;
 
@@ -252,13 +270,14 @@ Only after compile success, runner success, preview success, auto-heal completio
 ━━━━━━━━━━━━━━━━━━━━
 The local runner is protected infrastructure. Never break: runner scripts, entry files, ports, preview URLs, routing structure, build/start commands.
 
-MODE CONTRACTS:
-NEXT.JS: preserve package.json, next.config.*, app router, build scripts. NEVER create or use next.config.ts. You must ONLY use next.config.js or next.config.mjs. Enforcing TypeScript on the Next configuration file will break the runner.
-REACT/VITE: preserve index.html, vite.config.*, src/main.*, src/App.*, scripts.
-NODE/EXPRESS: preserve server.js/index.js, process.env.PORT, startup scripts.
-PHP: preserve index.php, structure.
-LARAVEL: preserve composer.json, public/index.php, routes/web.php.
-STATIC: preserve index.html, assets.
+MODE CONTRACTS AND EXPLICIT BANS:
+CONTEXT-AWARE TAILWIND RULE (ALL MODES): First, check existing files. If "tailwind.config.js" or "package.json" ALREADY exists, respect it and do NOT use CDN links. If building a NEW app, you MUST use the Tailwind CDN ("<script src='https://cdn.tailwindcss.com'></script>") in the root HTML/layout to save tokens. NEVER generate new Tailwind config files from scratch!
+NEXT.JS: Preserve package.json, next.config.*, app router. REQUIRED: If new app, inject Tailwind CDN in "app/layout.tsx". BANNED: NEVER create "next.config.ts" (ONLY use .js or .mjs).
+REACT/VITE: Preserve index.html, vite.config.*, src/main.*. REQUIRED: If new app, inject Tailwind CDN in "index.html".
+NODE/EXPRESS: Preserve server.js/index.js, package.json. REQUIRED: Pure backend logic. BANNED: NEVER generate frontend build tools (Webpack/Vite) inside a pure Node API.
+PHP: Preserve index.php. REQUIRED: Use Tailwind CDN for styling. BANNED: NEVER generate "package.json", "tailwind.config.js", "postcss.config.js", or any Node.js files. There is no Node compiler in PHP mode!
+LARAVEL: Preserve composer.json, routes/web.php. REQUIRED: Use Tailwind CDN for styling unless a Vite pipeline is already setup.
+STATIC: Preserve index.html. REQUIRED: Use Tailwind CDN for styling. BANNED: NEVER generate "package.json" or Node.js build files.
 If a change risks the runner: stop, create compatibility adapter, preserve existing behavior.
 
 ━━━━━━━━━━━━━━━━━━━━
@@ -337,6 +356,7 @@ FORMAT for nova-assets.json (You MUST include this exact file in your fileOperat
 \`\`\`
 EXCEPTION: If the user provides a specific image (via System Directive in the prompt) and asks you to insert it, you MUST use that exact local path in the code. The placeholder ban does not apply to user-uploaded images.
 CSS STYLING: You MUST use premium tailwind utility classes (e.g., backdrop-blur-xl, bg-gradient-to-br, shadow-2xl, hover:scale-105 transition-all). Do NOT leave UIs looking like dry wireframes. Add lush colors, deep contrast, and modern typography to make the layout breathtaking.
+DRY PRINCIPLE & TOKEN PRESERVATION (CRITICAL): NEVER write repetitive HTML structures (like 6 identical pricing cards). You MUST use data arrays and loops (e.g., .map() in React, foreach in PHP) to render repeating UI elements. To lock in design consistency and save tokens, you MUST declare reusable CSS classes (e.g., .premium-card) for repeating elements instead of duplicating massive utility strings on every element.
 
 ━━━━━━━━━━━━━━━━━━━━
 12. UNIVERSAL FILE READING SYSTEM
@@ -460,7 +480,7 @@ ${JSON.stringify(request.context.omittedFiles || [], null, 2)}
   }
 
   const anthropicMessages: any[] = [];
-  
+
   // Inject conversational history if available
   if (request.context.history && request.context.history.length > 0) {
     for (const msg of request.context.history) {
@@ -483,7 +503,7 @@ ${JSON.stringify(request.context.omittedFiles || [], null, 2)}
 
       const modelId = (aiModel === 'gemini-free' || !aiModel.includes('gemini')) ? 'gemini-2.5-flash' : aiModel;
       const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelId}:generateContent?key=${activeGeminiKey}`;
-      
+
       const contents = anthropicMessages.map(m => {
         if (Array.isArray(m.content)) {
           const parts = m.content.map((p: any) => {
@@ -518,7 +538,7 @@ ${JSON.stringify(request.context.omittedFiles || [], null, 2)}
       if (aiModel === 'gemini-free') {
         activeModel = 'claude-sonnet-4-6';
       }
-      
+
       const msg = await anthropic.messages.create({
         model: activeModel,
         max_tokens: 8192,
@@ -545,7 +565,7 @@ ${JSON.stringify(request.context.omittedFiles || [], null, 2)}
 
     // --- STEP 1: SELF-HEALING QA PIPELINE (AGENT DEBATE) ---
     console.log(`[QA Pipeline] Passing ${request.role} output to QA Agent for review...`);
-    
+
     const qaPrompt = `You are the QA/Security Agent for NovaAI. 
 The ${request.role} Agent has proposed the following file modifications:
 ${JSON.stringify(parsed.fileOperations, null, 2)}
@@ -583,10 +603,10 @@ Structure:
             const geminiData = await geminiRes.json();
             qaJsonStr = geminiData.candidates?.[0]?.content?.parts?.[0]?.text || "{}";
           } else {
-             throw new Error("Gemini QA failed");
+            throw new Error("Gemini QA failed");
           }
         } else {
-           throw new Error("No Gemini key");
+          throw new Error("No Gemini key");
         }
       } else {
         const qaMsg = await anthropic.messages.create({
@@ -605,7 +625,7 @@ Structure:
       if (qaFirst !== -1 && qaLast !== -1 && qaLast >= qaFirst) {
         qaJsonStr = qaJsonStr.substring(qaFirst, qaLast + 1);
       }
-      
+
       try {
         qaParsed = JSON.parse(qaJsonStr);
       } catch (e) {
@@ -628,7 +648,7 @@ Structure:
   } catch (err: unknown) {
     const errorMessage = err instanceof Error ? err.message : String(err);
     console.error("Anthropic Error:", errorMessage);
-    
+
     return {
       role: request.role,
       message: `Claude request failed: ${errorMessage}`,
