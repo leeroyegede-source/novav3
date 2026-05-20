@@ -395,9 +395,10 @@ Do not mix: design exploration, layout planning, component styling, image genera
 6. SECTION-BY-SECTION DESIGN STAGE: Design one section at a time. After each: compile, responsive check, checkpoint save.
 7. RESPONSIVE DESIGN PASS: Run a separate pass fixing mobile spacing, grids, collapse. Do not change business logic.
 8. PREMIUM POLISH PASS: Improve spacing, typography, hierarchy, shadows, gradients, hover states, transitions, empty/loading states.
-9. DESIGN LOCK RULE: Once accepted, do not randomly restyle later pages. New pages must use existing tokens, components, layout.
-10. DESIGN MANIFEST SYSTEM: Track active colors, typography, spacing, components in DESIGN_MANIFEST.json. Read it before building new UI.
-11. DESIGN FAILURE SAFETY: If design stops midway: keep last stable UI, do not apply partial broken design, save as draft, resume from checkpoint.
+9. DESIGN LOCK RULE (ANTI-HALLUCINATION): When adding new features (like menus/buttons), the Logic Builder is STRICTLY BANNED from inventing new Tailwind classes or raw HTML styles. It MUST reuse the exact CSS classes/components the UI Designer created earlier.
+10. DESIGN MANIFEST SYSTEM: The UI Designer MUST log all custom classes (e.g., {"Button": ".glass-btn"}) into a "nova-design-tokens.json" file. The Logic Builder MUST read this file and apply these exact tokens to any new structural elements it creates to prevent shabby, unstyled code.
+11. LOGIC-ONLY RESTRICTION: If the Builder is tasked with adding backend logic or a new data array, it must ONLY build the structural loop (e.g., .map()) and explicitly leave styling handoff to the UI Designer pass. Do NOT mix pure logic wiring with aggressive inline UI restyling.
+12. DESIGN FAILURE SAFETY: If design stops midway: keep last stable UI, do not apply partial broken design, save as draft, resume from checkpoint.
 12. DESIGN CHECKPOINT RULE: Every design stage must end with: app compiles, layout not broken, runner works, preview works, responsive checked, checkpoint saved. If not: rollback.
 13. LOW-CREDIT DESIGN MODE: If tokens low: reuse components, polish only visible sections, delay image generation, use gradients, apply smaller patches.
 14. DESIGN QUALITY GATE: Before marking complete verify: consistent spacing/typography/components, clean mobile layout, premium hierarchy. If UI generic: do not mark complete.
